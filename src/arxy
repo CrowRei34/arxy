@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.3.3"
+ARXY_VERSION="0.3.4"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -308,7 +308,8 @@ pacman_mut() {
         mkdir -p "$ARXY_ROOT/tmp" 2>/dev/null || true
         rm -f "$ARXY_ROOT"/tmp/pacman-arxy-*.conf 2>/dev/null || true
         local tmpconf
-        tmpconf="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy.XXXXXX.conf")" || die "no pude crear conf temporal"
+        # busybox mktemp exige que la plantilla TERMINE en XXXXXX (.conf no vale).
+        tmpconf="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy.XXXXXX")" || die "no pude crear conf temporal"
         grep -v '^[[:space:]]*CheckSpace' "$ARXY_ROOT/etc/pacman.conf" > "$tmpconf" || die "imagen rota: sin pacman.conf"
         in_chroot /usr/bin/pacman --config "/tmp/${tmpconf##*/}" "$@"
         local rc=$?
@@ -378,6 +379,18 @@ cmd_setup() {
     # Destinos de bind que la imagen quiza no trae (bwrap exige que existan
     # dentro): /host y el build dir AUR. Sin esto TODO falla en bwrap.
     mkdir -p "$stage/host" "$stage$NS_BUILD"
+    # Nodos /dev estaticos para chroot pelado (sin mounts gpg no funciona:
+    # exige /dev/null+urandom). Best-effort: en hosts restringidos falla
+    # mknod y se sigue (los binds de in_chroot lo cubren si hay privilegios).
+    local dev name dtype maj min
+    for dev in "null c 1 3" "zero c 1 5" "full c 1 7" "random c 1 8" "urandom c 1 9" "tty c 5 0"; do
+        read -r name dtype maj min <<<"$dev"
+        # Sin -m (no existe en chimerautils): mknod pelado + chmod.
+        if [[ ! -e "$stage/dev/$name" ]]; then
+            mknod "$stage/dev/$name" "$dtype" "$maj" "$min" 2>/dev/null && \
+                chmod 666 "$stage/dev/$name" 2>/dev/null || true
+        fi
+    done
     _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
     # Rotar: actual -> .old (rollback de una generacion), staging -> actual.
     rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
@@ -852,6 +865,20 @@ update_desktop_db() {
 }
 
 # --- ejecucion (corre como usuario)
+# canonicaliza una ruta sin fiarse del || entre comandos que escriben a
+# stdout: busybox realpath no conoce -m, lo trata como operando (imprime
+# su resolucion y falla) y el fallback duplicaria la ruta con un \n.
+resolve_path() { # <ruta> -> ruta canonica (siempre tiene exito)
+    local r
+    if r="$(realpath -m "$1" 2>/dev/null)" && [[ "$r" != *$'\n'* ]]; then
+        printf '%s' "$r"
+    elif r="$(readlink -f "$1" 2>/dev/null)"; then
+        printf '%s' "$r"
+    else
+        printf '%s' "$1"
+    fi
+}
+
 RESOLVED_HOST="" # ruta equivalente en el host, si aplica (para chequeo musl)
 RESOLVED_TARGET="" # resultado de resolve_target (global: $() perderia RESOLVED_HOST)
 
@@ -861,8 +888,7 @@ resolve_target() { # <bin|ruta> -> deja la ruta vista desde dentro en RESOLVED_T
     RESOLVED_TARGET=""
     if [[ "$t" == */* ]]; then
         [[ "$t" != /* ]] && t="$PWD/$t"
-        # realpath -m no existe en busybox: degradar con gracia
-        t="$(realpath -m "$t" 2>/dev/null || readlink -f "$t" 2>/dev/null || echo "$t")"
+        t="$(resolve_path "$t")"
         case "$t" in
             /host/*) RESOLVED_TARGET="$t"; return 0 ;;
         esac
@@ -886,7 +912,7 @@ resolve_target() { # <bin|ruta> -> deja la ruta vista desde dentro en RESOLVED_T
         done
         h="$(command -v "$t" 2>/dev/null || true)"
         if [[ -n "$h" && -f "$h" ]]; then
-            h="$(realpath -m "$h" 2>/dev/null || readlink -f "$h" 2>/dev/null || echo "$h")"
+            h="$(resolve_path "$h")"
             RESOLVED_HOST="$h"
             local vis=0 d
             for d in $VISIBLE_DIRS /tmp /run /dev /proc /sys; do
