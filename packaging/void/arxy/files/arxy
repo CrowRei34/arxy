@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.3.0"
+ARXY_VERSION="0.3.1"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -109,9 +109,10 @@ need_root() {
     fi
 }
 
-image_ok() {
-    [[ -x "$ARXY_ROOT/usr/bin/bash" && -x "$ARXY_ROOT/usr/bin/pacman" && -f "$ARXY_ROOT/etc/arch-release" ]]
+_image_ok() { # <dir>: valida un rootfs (instalado o en staging)
+    [[ -x "$1/usr/bin/bash" && -x "$1/usr/bin/pacman" && -f "$1/etc/arch-release" ]]
 }
+image_ok() { _image_ok "$ARXY_ROOT"; }
 
 # Sin tty (scripts, pipes) pacman no puede preguntar: confirmar solo.
 # Uso: nc_args <nombre-array>; luego "${arr[@]}".
@@ -334,7 +335,7 @@ cmd_setup() {
     need_root
     need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
-    mkdir -p "$ARXY_DATA" "$ARXY_ROOT"
+    mkdir -p "$ARXY_DATA"
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
     local tmp sha_tmp
     tmp="$(mktemp "$ARXY_DATA/.arxy-dl.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
@@ -362,16 +363,28 @@ cmd_setup() {
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
         fi
     fi
-    msg "extrayendo en $ARXY_ROOT..."
-    if ! tar -xpf "$tmp" -C "$ARXY_ROOT" 2>/dev/null; then
+    # Extraer a staging y validar ANTES de tocar lo instalado: setup atomico.
+    # Si algo falla aqui, la instalacion actual sigue intacta.
+    local stage="$ARXY_ROOT.new.$$"
+    rm -rf "$stage"
+    mkdir -p "$stage" || die "no pude crear staging en $stage"
+    msg "extrayendo en $stage..."
+    if ! tar -xpf "$tmp" -C "$stage" 2>/dev/null; then
         # busybox-tar sin soporte zstd: descomprimir con zstd primero
-        zstd -dc "$tmp" | tar -xp -C "$ARXY_ROOT" || die "extraccion fallo"
+        zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "$stage"; die "extraccion fallo"; }
     fi
     rm -f "$tmp" "$sha_tmp"
     trap - EXIT
     # Destinos de bind que la imagen quiza no trae (bwrap exige que existan
     # dentro): /host y el build dir AUR. Sin esto TODO falla en bwrap.
-    mkdir -p "$ARXY_ROOT/host" "$ARXY_ROOT$NS_BUILD"
+    mkdir -p "$stage/host" "$stage$NS_BUILD"
+    _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
+    # Rotar: actual -> .old (rollback de una generacion), staging -> actual.
+    rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
+    if [[ -d "$ARXY_ROOT" ]]; then
+        mv "$ARXY_ROOT" "$ARXY_ROOT.old" || { rm -rf "$stage"; die "no pude apartar la instalacion actual"; }
+    fi
+    mv "$stage" "$ARXY_ROOT" || die "rotacion fallo (la anterior esta en $ARXY_ROOT.old)"
     # rc para la shell de nivel 2: resuelve en el subsistema lo que el host
     # no conoce (rutas horneadas; se regenera en cada setup).
     {
@@ -408,6 +421,21 @@ cmd_setup() {
     msg "sincronizando bases de pacman..."
     pacman_mut -Sy || die "pacman -Sy fallo"
     msg "imagen lista en $ARXY_ROOT"
+}
+
+# Restaura la imagen anterior guardada por setup (una generacion).
+cmd_rollback() {
+    need_root
+    [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
+    if [[ -d "$ARXY_ROOT" ]]; then
+        local aside="$ARXY_ROOT.swap.$$"
+        mv "$ARXY_ROOT" "$aside" || die "no pude apartar la instalacion actual"
+        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || { mv "$aside" "$ARXY_ROOT"; die "rollback a medias: original restaurado"; }
+        mv "$aside" "$ARXY_ROOT.old"
+    else
+        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "rollback fallo"
+    fi
+    msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
 }
 
 # --- instalacion / remocion / mantenimiento (corren como root)
@@ -1001,7 +1029,8 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
   doctor               verifica requisitos e imagen
-  setup                (re)descarga e instala la imagen manualmente
+  setup                (re)descarga e instala la imagen (atomico, con rollback)
+  rollback             restaura la imagen anterior a un setup
   version|help         muestra version / esta ayuda
 
 Atajos: i, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
@@ -1039,6 +1068,7 @@ case "$cmd" in
     unexport)                   cmd_unexport "$@" ;;
     doctor | check)             cmd_doctor "$@" ;;
     setup | init)               cmd_setup "$@" ;;
+    rollback)                   cmd_rollback "$@" ;;
     version | -v | --version)   cmd_version "$@" ;;
     help | -h | --help)         cmd_help "$@" ;;
     -*)                         die "flag desconocida: $cmd. Prueba: $PROG help" ;;

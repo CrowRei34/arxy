@@ -59,7 +59,8 @@ sudo arxy setup                # descarga la imagen (~220MB) y listo
 | `arxy shell` | shell interactiva dentro de Arch |
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
-| `arxy setup / doctor` | (re)descargar imagen / chequeo de salud |
+| `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo de salud |
+| `arxy rollback` | restaura la imagen anterior a un setup |
 | `axy` | alias corto de `arxy` |
 
 Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
