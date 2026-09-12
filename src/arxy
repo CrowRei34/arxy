@@ -354,9 +354,9 @@ cmd_setup() {
     # shellcheck disable=SC2064
     trap "rm -f '$tmp' '$sha_tmp'" EXIT
     msg "descargando imagen..."
-    curl -fL --retry 3 -o "$tmp" "$ARXY_IMAGE_URL" || die "descarga fallo"
+    curl -fL --retry 3 -o "$tmp" "$ARXY_IMAGE_URL" || die "no se pudo descargar la imagen (¿red? reintenta, o usa ARXY_IMAGE_URL=file:///ruta/al/tarball)"
     if [[ -n "$ARXY_IMAGE_SHA256" ]]; then
-        [[ "$(sha256sum <"$tmp" | awk '{print $1}')" == "$ARXY_IMAGE_SHA256" ]] || die "sha256 no coincide, abortando"
+        [[ "$(sha256sum <"$tmp" | awk '{print $1}')" == "$ARXY_IMAGE_SHA256" ]] || die "sha256 no coincide, abortando (¿descarga truncada? reintenta o revisa ARXY_IMAGE_SHA256)"
     else
         # Sin hash fijado: intentar el .sha256 publicado junto al tarball
         # en el release (arxy-image lo sube siempre). La URL puede traer
@@ -368,7 +368,7 @@ cmd_setup() {
             local sha_rel
             sha_rel="$(grep -Eo '[0-9a-f]{64}' "$sha_tmp" | head -n 1)"
             [[ -n "$sha_rel" && "$(sha256sum <"$tmp" | awk '{print $1}')" == "$sha_rel" ]] \
-                || die "sha256 del release no coincide, abortando"
+                || die "sha256 del release no coincide, abortando (¿descarga truncada? reintenta)"
             msg "verificado contra .sha256 del release"
         else
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
