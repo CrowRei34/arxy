@@ -61,6 +61,7 @@ sudo arxy setup                # descarga la imagen (~220MB) y listo
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
 | `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo de salud |
+| `arxy dedup` | hardlinkea ficheros idénticos de `/usr` (corre solo tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
 | `arxy rollback` | restaura el rootfs completo al estado previo al último setup (se pierde lo instalado después) |
 | `axy` | alias corto de `arxy` |
 
@@ -104,6 +105,9 @@ escape hatch `ARXY_ALLOW_RAW_PACMAN=1`); CheckSpace se desactiva en
 operaciones chroot (la mtab de containers anidados no expone el rootfs);
 apps GTK/Qt con cachés de módulos de rutas absolutas son best-effort. Ni el nivel 1 (cero aislamiento) ni el 2
 son sandbox de seguridad: no ejecutes software no confiable.
+Dedup: si una app modificara un fichero hardlinkeado afectaría a las demás
+que lo comparten; en `/usr` no ocurre en la práctica (pacman reemplaza
+ficheros al actualizar, no escribe in-place: el link se rompe solo).
 
 ## Desarrollo
 
