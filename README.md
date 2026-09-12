@@ -60,7 +60,6 @@ sudo arxy setup                # descarga la imagen (~220MB) y listo
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
 | `arxy setup / doctor` | (re)descargar imagen / chequeo de salud |
-| `arxy inspect-deps <bin>` | qué librerías necesitaría un binario del host |
 | `axy` | alias corto de `arxy` |
 
 Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
@@ -77,12 +76,28 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
   `sudo`. AUR solo `-bin` (nunca compila toolchains), construidos como
   usuario en `/var/lib/arxy/build`.
 - Repos: `core` + `extra` + `multilib` (Steam y 32 bits funcionan).
+- Dos niveles de ejecución, autodetectados (`arxy doctor` los muestra,
+  `ARXY_LEVEL=1|2` fuerza uno):
+  - **Nivel 1** (bwrap + user namespaces): el habitual.
+  - **Nivel 2** (sin namespaces): `run` vía el `ld-linux` del subsistema,
+    `install` vía `chroot` con sudo. Para kernels hardened o containers
+    donde bwrap no funciona. Sin FUSE en ningún nivel, por decisión:
+    cada formato FUSE reintroduciría la dependencia que arxy elimina
+    (la imagen es un tarball plano, no squashfs/dwarfs).
 
 ## Límites honestos
 
 Necesitan demonios root/systemd y **no** van dentro: TeamViewer, AnyDesk.
 `protonvpn-app` choca con el ProtonVPN del host (misma app single-instance
 en el bus compartido). Steam/umu-launcher sí van (multilib habilitado).
+En nivel 2: AUR no disponible (compilar exige namespaces: solo paquetes
+oficiales); `pacman -S/-U/-R` dentro de `arxy shell` está bloqueado a
+propósito (vería la DB del host: usa `arxy install/remove/update`;
+solo cubre invocación por nombre, `/usr/bin/pacman` directo no intercepta;
+escape hatch `ARXY_ALLOW_RAW_PACMAN=1`); CheckSpace se desactiva en
+operaciones chroot (la mtab de containers anidados no expone el rootfs);
+apps GTK/Qt con cachés de módulos de rutas absolutas son best-effort. Ni el nivel 1 (cero aislamiento) ni el 2
+son sandbox de seguridad: no ejecutes software no confiable.
 
 ## Desarrollo
 
