@@ -76,7 +76,7 @@ die()  { echo "arxy: error: $*" >&2; exit 1; }
 need_cmd() {
     local c
     for c in "$@"; do
-        command -v "$c" >/dev/null 2>&1 || die "falta '$c' en el host"
+        command -v "$c" >/dev/null 2>&1 || die "falta '$c' en el host (instalalo con tu gestor de paquetes)"
     done
 }
 
@@ -126,7 +126,7 @@ ensure_image() {
     image_ok && return 0
     msg "imagen no encontrada en $ARXY_ROOT, descargando..."
     cmd_setup
-    image_ok || die "la instalacion de la imagen fallo"
+    image_ok || die "la instalacion de la imagen fallo (mira el error de arriba o reintenta 'sudo $PROG setup')"
 }
 
 # --- runtime: mount namespace minimo, cero aislamiento
@@ -309,8 +309,8 @@ pacman_mut() {
         rm -f "$ARXY_ROOT"/tmp/pacman-arxy-*.conf 2>/dev/null || true
         local tmpconf
         # busybox mktemp exige que la plantilla TERMINE en XXXXXX (.conf no vale).
-        tmpconf="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy.XXXXXX")" || die "no pude crear conf temporal"
-        grep -v '^[[:space:]]*CheckSpace' "$ARXY_ROOT/etc/pacman.conf" > "$tmpconf" || die "imagen rota: sin pacman.conf"
+        tmpconf="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy.XXXXXX")" || die "no pude crear conf temporal (¿espacio en $ARXY_ROOT/tmp?)"
+        grep -v '^[[:space:]]*CheckSpace' "$ARXY_ROOT/etc/pacman.conf" > "$tmpconf" || die "imagen rota: sin pacman.conf (reinstala con 'sudo $PROG setup')"
         in_chroot /usr/bin/pacman --config "/tmp/${tmpconf##*/}" "$@"
         local rc=$?
         rm -f "$tmpconf" || true
@@ -369,7 +369,7 @@ cmd_setup() {
     # Si algo falla aqui, la instalacion actual sigue intacta.
     local stage="$ARXY_ROOT.new.$$"
     rm -rf "$stage"
-    mkdir -p "$stage" || die "no pude crear staging en $stage"
+    mkdir -p "$stage" || die "no pude crear staging en $stage (¿~1GB libre?)"
     msg "extrayendo en $stage..."
     if ! tar -xpf "$tmp" -C "$stage" 2>/dev/null; then
         # busybox-tar sin soporte zstd: descomprimir con zstd primero
@@ -513,9 +513,11 @@ cmd_install() {
 # --- asi que se compila como usuario y se instala con sudo por separado)
 cmd_install_aur() {
     [[ $# -ge 1 ]] || die "uso: $PROG install --aur <paquete...>"
+    local _hp
+    for _hp in "$@"; do [[ "$_hp" == -* ]] || break; done
+    [[ "$_hp" == -* ]] && die "nada que instalar (¿solo flags?)"
     ensure_image
-    level
-    [[ "$_ARXY_LEVEL" == 2 ]] && die "AUR necesita nivel 1 (compilar exige user namespaces); en nivel 2 solo paquetes oficiales"
+    level    [[ "$_ARXY_LEVEL" == 2 ]] && die "AUR necesita nivel 1 (compilar exige user namespaces); en nivel 2 solo paquetes oficiales"
     ensure_aur_env
     local p f failed=()
     for p in "$@"; do
@@ -1064,7 +1066,7 @@ cmd_run() {
     ensure_image
     level
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
-        [[ -x "$LD_LINUX" ]] || die "imagen rota: sin ld-linux en $LD_LINUX"
+        [[ -x "$LD_LINUX" ]] || die "imagen rota: sin ld-linux en $LD_LINUX (reinstala con 'sudo $PROG setup')"
     else
         need_cmd bwrap
     fi
@@ -1107,7 +1109,7 @@ cmd_shell() {
     ensure_image
     level
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
-        [[ -x "$LD_LINUX" ]] || die "imagen rota: sin ld-linux en $LD_LINUX"
+        [[ -x "$LD_LINUX" ]] || die "imagen rota: sin ld-linux en $LD_LINUX (reinstala con 'sudo $PROG setup')"
         cmd_shell_level2 "$@"
         return
     fi
@@ -1279,6 +1281,13 @@ EOF
 [[ $# -ge 1 ]] || { cmd_help; exit 0; }
 cmd="$1"
 shift
+# --help tras el comando: ayuda global. Evita que 'install --help' intente
+# instalar un paquete llamado --help. Ayuda por-comando no existe a proposito
+# (cada mal uso ya imprime su 'uso:' de una linea).
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cmd_help
+    exit 0
+fi
 case "$cmd" in
     install | i | add)          cmd_install "$@" ;;
     remove | rm | uninstall)    cmd_remove "$@" ;;
