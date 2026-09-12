@@ -717,10 +717,9 @@ cmd_clean() {
 do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     local auto="${1:-}"
     local start=$SECONDS saved=0 linked=0
-    local work
-    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
-    # shellcheck disable=SC2064
-    trap "rm -rf '$work'" RETURN
+    local work=""
+    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX")" 2>/dev/null || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)"; return 0; }
+    trap '[[ -n "${work:-}" ]] && rm -rf "$work"' RETURN EXIT
     # cksum POSIX (stat -c no existe en BSD, find -printf no existe en busybox):
     # CRC+tamaño en una pasada; sha256 solo confirma candidatos.
     # -links 1 = idempotente (lo ya linkeado se salta solo); -type f excluye symlinks.
@@ -736,7 +735,8 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
         while IFS= read -r line; do
             h="${line%% *}"; f="${line#* }"; f="${f# }"; f="${f#\*}"
             if [[ "$h" == "$lasth" && -n "$first" ]]; then
-                if ln -f "$first" "$f" 2>/dev/null; then
+                # cmp antes de ln: si algo cambio entre cksum y aqui, no linkear distintos.
+                if cmp -s "$first" "$f" 2>/dev/null && ln -f "$first" "$f" 2>/dev/null; then
                     saved=$((saved + size)); linked=$((linked + 1))
                 fi
             else
@@ -751,11 +751,13 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     else
         msg "dedup: $linked archivos linkeados, ${mb} MB ahorrados en $((SECONDS - start))s"
     fi
+    return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 
 cmd_dedup() {
     need_root
     ensure_image
+    need_cmd find cksum sort awk uniq tr xargs sha256sum ln mktemp cmp
     do_dedup
 }
 
