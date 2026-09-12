@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.3.2"
+ARXY_VERSION="0.3.3"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -976,6 +976,19 @@ cmd_shell() {
     fi
 }
 
+cmd_which() { # <bin|ruta> : donde se resolveria (subsistema vs host)
+    [[ $# -ge 1 ]] || die "uso: $PROG which <programa|ruta>"
+    ensure_image
+    level
+    resolve_target "$1"
+    [[ -z "$RESOLVED_HOST" && "$_ARXY_LEVEL" == 2 ]] && RESOLVED_TARGET="$ARXY_ROOT$RESOLVED_TARGET"
+    if [[ -n "$RESOLVED_HOST" ]]; then
+        echo "$RESOLVED_TARGET  [host]"
+    else
+        echo "$RESOLVED_TARGET  [subsistema]"
+    fi
+}
+
 # --- doctor / version / ayuda
 cmd_doctor() {
     local ok=0
@@ -1030,6 +1043,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   search|s <texto>     buscar en repos
   search-aur|sa <txt>  buscar en AUR (paru o RPC; requiere jq)
   run <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
+  which|w <bin|ruta>    muestra donde se resolveria ([subsistema] o [host])
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
@@ -1068,6 +1082,7 @@ case "$cmd" in
     search-aur | sa)              cmd_search_aur "$@" ;;
     __install-file)               cmd_install_file "$@" ;;
     run | exec | x)             cmd_run "$@" ;;
+    which | w)                  cmd_which "$@" ;;
     shell | sh | enter)         cmd_shell "$@" ;;
     export)                     cmd_export "$@" ;;
     unexport)                   cmd_unexport "$@" ;;

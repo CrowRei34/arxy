@@ -56,6 +56,7 @@ sudo arxy setup                # descarga la imagen (~220MB) y listo
 | `arxy install <pkg...>` / `--aur` | instala (oficial / AUR `-bin`) + crea launcher |
 | `arxy remove <pkg...>` | desinstala y borra su launcher |
 | `arxy run <bin> [args]` | ejecuta algo dentro del subsistema |
+| `arxy which <bin>` | muestra dónde se resolvería ([subsistema] o [host]) |
 | `arxy shell` | shell interactiva dentro de Arch |
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
