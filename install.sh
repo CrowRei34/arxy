@@ -10,19 +10,19 @@
 # Instala: bin/arxy (+ symlink axy) y etc/arxy.conf.
 # La configuracion existente NO se sobrescribe (se deja .nuevo al lado).
 
-set -uo pipefail
+set -euo pipefail
 
 PREFIX="${PREFIX:-/usr/local}"
 DESTDIR="${DESTDIR:-}"
-SRC_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")"
+SRC_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")"
 
 BIN_DST="$DESTDIR$PREFIX/bin"
 CONF_DST="$DESTDIR/etc/arxy"
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "falta '$1' en el host" >&2; exit 1; }; }
 
-# Dependencias de runtime de arxy (mismas que el template xbps).
-for c in bash bwrap curl tar zstd xz gzip file; do
+# Dependencias de runtime de arxy (mismas que el template xbps + sha256sum).
+for c in bash bwrap curl tar zstd xz gzip file sha256sum; do
     need_cmd "$c"
 done
 

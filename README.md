@@ -23,6 +23,7 @@ arxy update                             # pacman -Syu del subsistema
 ## Requisitos del host
 
 `bash bwrap curl tar zstd xz gzip file` + user namespaces sin privilegios.
+Se requiere `bash>=4.4` (todas las distros soportadas lo traen).
 Comprobar: `arxy doctor`.
 
 ## Instalación

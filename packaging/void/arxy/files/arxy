@@ -13,6 +13,9 @@
 
 set -uo pipefail
 
+HOME="${HOME:-/root}"
+export LC_ALL=C
+
 ARXY_VERSION="0.2.0"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
@@ -36,9 +39,9 @@ NS_BUILD="/arxy-build"                     # misma dir vista desde dentro
 
 ARXY_ARGV=("$@")
 
-# --- usuario real (los .desktop van a SU home aunque se use sudo)
-if [[ "$(id -u)" -eq 0 && -n "${SUDO_USER:-}" ]]; then
-    REAL_USER="$SUDO_USER"
+# --- usuario real (los .desktop van a SU home aunque se use sudo/doas)
+if [[ "$(id -u)" -eq 0 ]]; then
+    REAL_USER="${SUDO_USER:-${DOAS_USER:-${USER:-$(id -un)}}}"
 else
     REAL_USER="${USER:-$(id -un)}"
 fi
@@ -55,6 +58,15 @@ need_cmd() {
     for c in "$@"; do
         command -v "$c" >/dev/null 2>&1 || die "falta '$c' en el host"
     done
+}
+
+# sudo/doas segun lo que traiga el host (Void minimo no trae ninguno por defecto).
+as_root() {
+    if command -v sudo >/dev/null 2>&1; then
+        sudo -- "$@"
+    else
+        doas "$@"
+    fi
 }
 
 # Re-ejecuta todo el argv original como root (los comandos que escriben lo exigen).
@@ -116,12 +128,20 @@ bwrap_base() {
         --ro-bind-try /sys /sys \
         --bind / /host
     resolv="$(readlink -f /etc/resolv.conf 2>/dev/null || echo /etc/resolv.conf)"
-    [[ -f "$resolv" ]] && printf '%s\n' --ro-bind "$resolv" /etc/resolv.conf
+    if [[ -f "$resolv" ]]; then
+        printf '%s\n' --ro-bind "$resolv" /etc/resolv.conf
+    else
+        msg "aviso: sin resolv.conf valido en el host, el DNS dentro puede fallar"
+    fi
     [[ -f /etc/hosts ]] && printf '%s\n' --ro-bind /etc/hosts /etc/hosts
     # La imagen trae /etc/machine-id Grennan ("uninitialized", 13 chars) y Qt/D-Bus
     # abortan (viber exit 134). Se comparte el del host (ya se comparte el
     # bus de sesion via /run); /var/lib/dbus/machine-id es symlink a este.
-    [[ -s /etc/machine-id ]] && printf '%s\n' --ro-bind /etc/machine-id /etc/machine-id
+    if [[ -s /etc/machine-id ]]; then
+        printf '%s\n' --ro-bind /etc/machine-id /etc/machine-id
+    else
+        msg "aviso: host sin machine-id valido, Qt/D-Bus dentro pueden abortar"
+    fi
     [[ -f /etc/localtime ]] && printf '%s\n' --ro-bind-try /etc/localtime /etc/localtime
 }
 
@@ -160,37 +180,46 @@ inside_dir() {
 # --- setup: descarga + verifica + extrae la imagen (corre como root)
 cmd_setup() {
     need_root
-    need_cmd curl tar sha256sum
+    need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA" "$ARXY_ROOT"
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
-    local tmp
+    local tmp sha_tmp
     tmp="$(mktemp "$ARXY_DATA/.arxy-dl.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     # shellcheck disable=SC2064
-    trap "rm -f '$tmp'" EXIT
+    trap "rm -f '$tmp' '$sha_tmp'" EXIT
     msg "descargando imagen..."
     curl -fL --retry 3 -o "$tmp" "$ARXY_IMAGE_URL" || die "descarga fallo"
     if [[ -n "$ARXY_IMAGE_SHA256" ]]; then
-        echo "$ARXY_IMAGE_SHA256  $tmp" | sha256sum -c - >/dev/null || die "sha256 no coincide, abortando"
+        [[ "$(sha256sum <"$tmp" | awk '{print $1}')" == "$ARXY_IMAGE_SHA256" ]] || die "sha256 no coincide, abortando"
     else
         # Sin hash fijado: intentar el .sha256 publicado junto al tarball
-        # en el release (arxy-image lo sube siempre). Si no existe, avisar
-        # y seguir sin verificar (comportamiento historico).
-        local sha_tmp sha_rel
-        sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
-        if curl -fLs --retry 2 -o "$sha_tmp" "$ARXY_IMAGE_URL.sha256" 2>/dev/null && [[ -s "$sha_tmp" ]]; then
-            read -r sha_rel _ < "$sha_tmp"
-            echo "$sha_rel  $tmp" | sha256sum -c - >/dev/null || die "sha256 del release no coincide, abortando"
+        # en el release (arxy-image lo sube siempre). La URL puede traer
+        # ?query/#fragmento: se recortan antes de añadir .sha256.
+        # Si no existe, avisar y seguir sin verificar (historico).
+        local sha_url="${ARXY_IMAGE_URL%%\?*}"
+        sha_url="${sha_url%%\#*}.sha256"
+        if curl -fLs --retry 2 -o "$sha_tmp" "$sha_url" 2>/dev/null && [[ -s "$sha_tmp" ]]; then
+            local sha_rel
+            sha_rel="$(grep -Eo '[0-9a-f]{64}' "$sha_tmp" | head -n 1)"
+            [[ -n "$sha_rel" && "$(sha256sum <"$tmp" | awk '{print $1}')" == "$sha_rel" ]] \
+                || die "sha256 del release no coincide, abortando"
             msg "verificado contra .sha256 del release"
         else
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
         fi
-        rm -f "$sha_tmp"
     fi
     msg "extrayendo en $ARXY_ROOT..."
-    tar -xpf "$tmp" -C "$ARXY_ROOT" || die "extraccion fallo"
-    rm -f "$tmp"
+    if ! tar -xpf "$tmp" -C "$ARXY_ROOT" 2>/dev/null; then
+        # busybox-tar sin soporte zstd: descomprimir con zstd primero
+        zstd -dc "$tmp" | tar -xp -C "$ARXY_ROOT" || die "extraccion fallo"
+    fi
+    rm -f "$tmp" "$sha_tmp"
     trap - EXIT
+    # Destinos de bind que la imagen quiza no trae (bwrap exige que existan
+    # dentro): /host y el build dir AUR. Sin esto TODO falla en bwrap.
+    mkdir -p "$ARXY_ROOT/host" "$ARXY_ROOT$NS_BUILD"
     {
         echo "url=$ARXY_IMAGE_URL"
         echo "date=$(date -u +%FT%TZ)"
@@ -237,7 +266,7 @@ cmd_install_aur() {
             failed+=("$p")
             continue
         fi
-        if ! sudo -- "$SELF" __install-file "$f"; then
+        if ! as_root "$SELF" __install-file "$f"; then
             msg "error: fallo al instalar $p (sigo con el resto)"
             failed+=("$p")
         fi
@@ -267,7 +296,7 @@ ensure_aur_env() {
         die "imagen rota: sin makepkg"
     if [[ "${#missing_tools[@]}" -gt 0 ]]; then
         msg "herramientas AUR que faltan: ${missing_tools[*]}" >&2
-        sudo -- "$SELF" install "${missing_tools[@]}" >&2 || \
+        as_root "$SELF" install "${missing_tools[@]}" >&2 || \
             die "no pude instalar herramientas AUR"
     fi
     if in_bwrap /usr/bin/paru --version >/dev/null 2>&1; then
@@ -309,14 +338,14 @@ aur_build() { # <pkg> -> ruta paquete construido
         for d in $md; do
             d="${d%%[<>=]*}" # quita restricciones de version (gcc>=13 -> gcc)
             [[ -z "$d" ]] && continue
-            grep -qx "$d" <<<"$selfpkgs" 2>/dev/null && continue
+            grep -qxF "$d" <<<"$selfpkgs" 2>/dev/null && continue
             in_bwrap /usr/bin/pacman -Q "$d" >/dev/null 2>&1 || missing+=("$d")
         done
         if [[ "${#missing[@]}" -gt 0 ]]; then
             # OJO: esto corre dentro de f="$(aur_build ...)": todo a stderr
             # o el stdout (ruta del .pkg) se contamina y el install falla.
             msg "deps de $pkg: ${missing[*]}" >&2
-            sudo -- "$SELF" install "${missing[@]}" >&2 || \
+            as_root "$SELF" install "${missing[@]}" >&2 || \
                 msg "aviso: alguna dep no esta en repos oficiales; sigo y que decida makepkg" >&2
         fi
     fi
@@ -417,7 +446,7 @@ cmd_remove() {
         [[ "$p" == -* ]] && continue
         while IFS= read -r f; do
             rm -f "$f" && msg "lanzador borrado: ${f##*/}"
-        done < <(grep -rl "^X-Arxy-Pkg=$p$" "$REAL_APPS"/arxy-*.desktop 2>/dev/null || true)
+        done < <(grep -rlxF "X-Arxy-Pkg=$p" "$REAL_APPS"/arxy-*.desktop 2>/dev/null || true)
     done
     update_desktop_db
 }
@@ -453,7 +482,7 @@ cmd_list() {
     exported="$(grep -h '^X-Arxy-Pkg=' "$REAL_APPS"/arxy-*.desktop 2>/dev/null | cut -d= -f2- | sort -u || true)"
     while IFS= read -r line; do
         pkg="${line%% *}"
-        if grep -qx "$pkg" <<<"$exported" 2>/dev/null; then
+        if grep -qxF "$pkg" <<<"$exported" 2>/dev/null; then
             echo "$line  [desktop]"
         else
             echo "$line"
@@ -552,7 +581,7 @@ export_one() { # <ruta.desktop del host> <pkg|nombre>
         elif [[ "$icon" != */* ]]; then
             local found
             found="$(find "$ARXY_ROOT/usr/share/icons" "$ARXY_ROOT/usr/share/pixmaps" \
-                -name "$icon.*" 2>/dev/null | head -1 || true)"
+                -name "$icon.*" 2>/dev/null | head -n 1 || true)"
             [[ -n "$found" ]] && icon="$found"
         fi
     fi
@@ -566,7 +595,7 @@ export_one() { # <ruta.desktop del host> <pkg|nombre>
         echo "Name=$name"
         [[ -n "$comment" ]] && echo "Comment=$comment"
         echo "Exec=$new_exec"
-        echo "TryExec=/usr/bin/$PROG"
+        echo "TryExec=$(command -v "$PROG" 2>/dev/null || echo "/usr/bin/$PROG")"
         [[ -n "$icon" ]] && echo "Icon=$icon"
         echo "Terminal=${term:-false}"
         echo "Type=Application"
@@ -594,7 +623,7 @@ update_desktop_db() {
     command -v update-desktop-database >/dev/null 2>&1 || return 0
     [[ -d "$REAL_APPS" ]] || return 0
     if [[ "$(id -u)" -eq 0 && "$REAL_USER" != "root" ]]; then
-        su -s /bin/sh "$REAL_USER" -c "update-desktop-database '$REAL_APPS'" >/dev/null 2>&1 || true
+        su -s /bin/sh "$REAL_USER" -c "update-desktop-database \"$REAL_APPS\"" >/dev/null 2>&1 || true
     else
         update-desktop-database "$REAL_APPS" >/dev/null 2>&1 || true
     fi
@@ -610,7 +639,8 @@ resolve_target() { # <bin|ruta> -> deja la ruta vista desde dentro en RESOLVED_T
     RESOLVED_TARGET=""
     if [[ "$t" == */* ]]; then
         [[ "$t" != /* ]] && t="$PWD/$t"
-        t="$(realpath -m "$t")"
+        # realpath -m no existe en busybox: degradar con gracia
+        t="$(realpath -m "$t" 2>/dev/null || readlink -f "$t" 2>/dev/null || echo "$t")"
         case "$t" in
             /host/*) RESOLVED_TARGET="$t"; return 0 ;;
         esac
@@ -634,7 +664,7 @@ resolve_target() { # <bin|ruta> -> deja la ruta vista desde dentro en RESOLVED_T
         done
         h="$(command -v "$t" 2>/dev/null || true)"
         if [[ -n "$h" && -f "$h" ]]; then
-            h="$(realpath -m "$h")"
+            h="$(realpath -m "$h" 2>/dev/null || readlink -f "$h" 2>/dev/null || echo "$h")"
             RESOLVED_HOST="$h"
             local vis=0 d
             for d in $VISIBLE_DIRS /tmp /run /dev /proc /sys; do
@@ -689,9 +719,12 @@ cmd_doctor() {
     command -v bwrap >/dev/null 2>&1; say $? "bwrap en el host"
     command -v curl >/dev/null 2>&1; say $? "curl en el host"
     command -v tar >/dev/null 2>&1; say $? "tar en el host"
+    for _c in zstd sha256sum awk sed grep mktemp su; do
+        command -v "$_c" >/dev/null 2>&1; say $? "$_c en el host"
+    done
     if command -v unshare >/dev/null 2>&1 && unshare --user --map-root-user true 2>/dev/null; then
         say 0 "user namespaces (unshare -U)"
-    elif bwrap --ro-bind / / -- "$(command -v true)" 2>/dev/null; then
+    elif bwrap --ro-bind / / /bin/true 2>/dev/null; then
         say 0 "user namespaces (bwrap)"
     else
         say 1 "user namespaces (necesarios para correr sin root)"

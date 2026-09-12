@@ -6,11 +6,13 @@ version=0.2.0
 revision=1
 archs="noarch"
 build_style=meta
-depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils"
+depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils sudo"
 short_desc="Subsistema Arch minimalista para correr software glibc en cualquier distro"
 maintainer="SrDicov <https://github.com/SrDicov>"
 license="MIT"
 homepage="https://github.com/SrDicov/arxy"
+# No pisar la config del usuario al actualizar (puede anclar URL/SHA).
+conf_files="/etc/arxy/arxy.conf"
 
 do_install() {
 	vbin ${FILESDIR}/arxy
