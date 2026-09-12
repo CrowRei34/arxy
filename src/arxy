@@ -452,6 +452,13 @@ cmd_rollback() {
 }
 
 # --- instalacion / remocion / mantenimiento (corren como root)
+# Limpia los .pkg descargados tras operar (cero cache prolongada).
+# Best-effort y silencioso; ARXY_KEEP_PKG_CACHE=1 la conserva.
+clean_pkg_cache() {
+    [[ -n "${ARXY_KEEP_PKG_CACHE:-}" ]] && return 0
+    rm -f "$ARXY_ROOT"/var/cache/pacman/pkg/* 2>/dev/null || true
+}
+
 cmd_install() {
     if [[ "${1:-}" == "--aur" ]]; then
         shift
@@ -464,6 +471,7 @@ cmd_install() {
     local -a nc
     nc_args nc
     pacman_mut -S --needed "${nc[@]}" "$@" || die "pacman fallo"
+    clean_pkg_cache
     local p
     for p in "$@"; do
         [[ "$p" == -* ]] && continue
@@ -661,6 +669,7 @@ cmd_install_file() {
     local -a nc
     nc_args nc
     pacman_mut -U --needed "${nc[@]}" "$file" || die "pacman -U fallo"
+    clean_pkg_cache
     local name
     name="$(in_sys /usr/bin/pacman -Qp "$file" 2>/dev/null | awk '{print $1}')"
     [[ -n "${name:-}" ]] && { cmd_export "$name" || true; }
@@ -690,6 +699,7 @@ cmd_update() {
     local -a nc
     nc_args nc
     pacman_mut -Syu "${nc[@]}" || die "pacman fallo"
+    clean_pkg_cache
     [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
 }
 
