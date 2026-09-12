@@ -1,0 +1,19 @@
+# Template file for 'arxy'
+# Uso: copiar esta carpeta 'arxy/' a void-packages/srcpkgs/ y compilar:
+#   ./xbps-src pkg arxy
+pkgname=arxy
+version=0.2.0
+revision=1
+archs="noarch"
+build_style=meta
+depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils"
+short_desc="Subsistema Arch minimalista para correr software glibc en cualquier distro"
+maintainer="SrDicov <https://github.com/SrDicov>"
+license="MIT"
+homepage="https://github.com/SrDicov/arxy"
+
+do_install() {
+	vbin ${FILESDIR}/arxy
+	ln -sf arxy ${DESTDIR}/usr/bin/axy
+	vinstall ${FILESDIR}/arxy.conf 644 etc/arxy/
+}

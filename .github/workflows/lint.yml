@@ -1,0 +1,27 @@
+name: lint
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  shell:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install shellcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+
+      - name: bash -n
+        run: bash -n src/arxy && bash -n install.sh && echo BASHN_OK
+
+      - name: shellcheck (cero warnings)
+        run: shellcheck -S warning src/arxy install.sh && echo SHELLCHECK_OK
+
+      - name: packaging/void en sincronia con src/ y config/
+        run: |
+          cmp src/arxy packaging/void/arxy/files/arxy
+          cmp config/arxy.conf packaging/void/arxy/files/arxy.conf
+          echo SYNC_OK
