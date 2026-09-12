@@ -199,11 +199,12 @@ run_pacman() {
         # Sin namespaces: el pacman del subsistema con rutas explicitas.
         # Solo lecturas; lo que escribe va por pacman_mut (chroot).
         # Los Include absolutos (/etc/pacman.d/...) resolverian en el HOST:
-        # se reescriben al rootfs en conf efimera (ruta fija: mismo contenido
-        # en llamadas concurrentes, se regenera siempre).
+        # se reescriben al rootfs en conf efimera (mktemp: la fija sufria
+        # carrera entre concurrentes). Escrituras intactas (chroot OK).
         mkdir -p "$ARXY_ROOT/tmp" 2>/dev/null || true
-        local _ro="$ARXY_ROOT/tmp/pacman-arxy-ro.conf"
-        sed "s|/etc/pacman.d/|$ARXY_ROOT/etc/pacman.d/|g" "$ARXY_ROOT/etc/pacman.conf" > "$_ro" 2>/dev/null || return 1
+        local _ro
+        _ro="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy-ro.XXXXXX")" || return 1
+        sed "s|/etc/pacman.d/|$ARXY_ROOT/etc/pacman.d/|g" "$ARXY_ROOT/etc/pacman.conf" > "$_ro" 2>/dev/null || { rm -f "$_ro"; return 1; }
         in_sys /usr/bin/pacman --root "$ARXY_ROOT" --config "$_ro" \
             --dbpath "$ARXY_ROOT/var/lib/pacman" "$@"
         local _rc=$?
@@ -526,7 +527,8 @@ cmd_install_aur() {
     for _hp in "$@"; do [[ "$_hp" == -* ]] || break; done
     [[ "$_hp" == -* ]] && die "nada que instalar (¿solo flags?)"
     ensure_image
-    level    [[ "$_ARXY_LEVEL" == 2 ]] && die "AUR necesita nivel 1 (compilar exige user namespaces); en nivel 2 solo paquetes oficiales"
+    level
+    [[ "$_ARXY_LEVEL" == 2 ]] && die "AUR necesita nivel 1 (compilar exige user namespaces); en nivel 2 solo paquetes oficiales"
     ensure_aur_env
     local p f failed=()
     for p in "$@"; do
@@ -1220,7 +1222,7 @@ doctor_fix() { # [--fix]
         msg "falta hold IgnorePkg=mesa: un update traeria mesa oficial +170MB"
         ok=1
         if [[ -n "$fix" ]]; then
-            printf '\nIgnorePkg   = mesa\n' >> "$ARXY_ROOT/etc/pacman.conf" && msg "hold añadido"
+            sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" && msg "hold añadido (bajo [options])"
         fi
     fi
     local lock="$ARXY_ROOT/var/lib/pacman/db.lck"
