@@ -642,12 +642,23 @@ aur_build() { # <pkg> -> ruta paquete construido
     # Shims: los .deb/.rpm de los -bin traen ficheros de root:0 y tanto
     # bsdtar como tar intentan chown dentro del userns (EINVAL fatal).
     # Se desactivan solo durante este build. El de bsdtar ademas normaliza
-    # llamadas estilo viejo ('xf f' sin guion, tipicas en PKGBUILDs).
+    # llamadas estilo viejo ('xf f' sin guion, tipicas en PKGBUILDs): con
+    # guion la 'f' se come la siguiente letra ('-xfv' abre 'v'), asi que se
+    # separa la operacion y la 'f' va justo antes del fichero (pear-desktop).
     cat > "$work_host/bin/bsdtar" <<'SHIM'
 #!/bin/sh
 case "$1" in
   -*) exec /usr/bin/bsdtar --no-same-owner "$@" ;;
-  [xcrtu]*) b="$1"; shift; exec /usr/bin/bsdtar --no-same-owner "-$b" "$@" ;;
+  [xcrtu]*)
+    b="$1"; shift; op="${b%"${b#?}"}"; rest="${b#?}"
+    case "$rest" in
+      *f*) rest="$(printf '%s' "$rest" | tr -d 'f')"
+           if [ -n "$rest" ]; then set -- "-$op" "-$rest" -f "$@";
+           else set -- "-$op" -f "$@"; fi ;;
+      *) if [ -n "$rest" ]; then set -- "-$op" "-$rest" "$@";
+         else set -- "-$op" "$@"; fi ;;
+    esac
+    exec /usr/bin/bsdtar --no-same-owner "$@" ;;
   *) exec /usr/bin/bsdtar "$@" ;;
 esac
 SHIM
