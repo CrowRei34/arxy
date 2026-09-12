@@ -22,8 +22,10 @@ SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
 # --- configuracion (precedencia: env > user-conf > sys-conf > defaults)
 # Congelar lo que vino por entorno: ningun fichero puede pisarlo (se
-# restaura tras leerlos, junto al user-conf del usuario real, mas abajo).
-_frozen_env="$(compgen -e | grep '^ARXY_' || true)"
+# restauran VALORES tras leerlos, junto al user-conf del usuario real,
+# mas abajo; guardar solo nombres no sirve: el source ya los piso).
+declare -A _frozen_val=()
+while IFS= read -r _n; do _frozen_val["$_n"]="${!_n}"; done < <(compgen -e | grep '^ARXY_' || true)
 ARXY_ROOT="${ARXY_ROOT:-/var/lib/arxy/root}"
 ARXY_IMAGE_URL="${ARXY_IMAGE_URL:-}"
 ARXY_IMAGE_SHA256="${ARXY_IMAGE_SHA256:-}"
@@ -58,13 +60,14 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
     # shellcheck source=/dev/null
     [[ -r "$REAL_HOME/.config/arxy/config" ]] && . "$REAL_HOME/.config/arxy/config"
 fi
-if [[ -n "${_frozen_env:-}" ]]; then
-    while IFS= read -r _line; do
+if ((${#_frozen_val[@]})); then
+    for _n in "${!_frozen_val[@]}"; do
+        printf -v "$_n" '%s' "${_frozen_val[$_n]}"
         # shellcheck disable=SC2163 # export indirecto intencionado (NAME=valor)
-        export "$_line"
-    done <<<"$_frozen_env"
+        export "$_n"
+    done
 fi
-unset _frozen_env _line
+unset _frozen_val _n
 
 LD_LINUX="$ARXY_ROOT/usr/lib/ld-linux-x86-64.so.2" # interprete ELF del subsistema
 ARXY_LIBPATH="$ARXY_ROOT/usr/lib"
