@@ -790,7 +790,7 @@ cmd_clean() { # [--apply]
     [[ "${1:-}" == "--apply" ]] && apply=1
     [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
     [[ -z "${2:-}" ]] || die "uso: $PROG clean [--apply]"
-    local r p a d f
+    local r p a d o f
     r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
     p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"
     a="-"; [[ -d "$ARXY_BUILD/aur" ]] && a="$(du -sh "$ARXY_BUILD/aur" 2>/dev/null | cut -f1)"
@@ -800,10 +800,12 @@ cmd_clean() { # [--apply]
         d="$(du -shc "$ARXY_DATA"/.arxy-dl.* "$ARXY_DATA"/.arxy-sha.* 2>/dev/null | tail -1 | cut -f1)"
         break
     done
+    o="-"; [[ -d "$ARXY_ROOT.old" ]] && o="$(du -sh "$ARXY_ROOT.old" 2>/dev/null | cut -f1)"
     msg "rootfs: $r en $ARXY_ROOT"
     msg "cache pacman: $p"
     msg "builds AUR: $a en $ARXY_BUILD/aur"
     msg "descargas huerfanas: $d"
+    msg "rollback: $o en $ARXY_ROOT.old ('$PROG rollback' lo restaura; --apply lo borra)"
     if [[ -z "$apply" ]]; then
         msg "nada tocado (dry-run); '$PROG clean --apply' para limpiar"
         return 0
@@ -814,6 +816,7 @@ cmd_clean() { # [--apply]
         [[ -e "$f" ]] || continue
         rm -f "$f"
     done
+    rm -rf "${ARXY_ROOT:?}.old" 2>/dev/null || true
     msg "limpieza hecha"
 }
 
