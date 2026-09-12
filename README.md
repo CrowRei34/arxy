@@ -105,6 +105,9 @@ escape hatch `ARXY_ALLOW_RAW_PACMAN=1`); CheckSpace se desactiva en
 operaciones chroot (la mtab de containers anidados no expone el rootfs);
 apps GTK/Qt con cachés de módulos de rutas absolutas son best-effort. Ni el nivel 1 (cero aislamiento) ni el 2
 son sandbox de seguridad: no ejecutes software no confiable.
+Mesa es mesa-mini sin LLVM (ahorra ~170MB): Intel iGPU y softpipe van;
+AMD/NVIDIA pierden aceleración HW (fallback a CPU). Verificado headless
+con eglinfo (softpipe en los 3 perfiles); en hardware real solo probado Intel.
 Dedup: si una app modificara un fichero hardlinkeado afectaría a las demás
 que lo comparten; en `/usr` no ocurre en la práctica (pacman reemplaza
 ficheros al actualizar, no escribe in-place: el link se rompe solo).
