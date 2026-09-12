@@ -460,6 +460,24 @@ clean_pkg_cache() {
     rm -f "$ARXY_ROOT"/var/cache/pacman/pkg/* 2>/dev/null || true
 }
 
+# Stack GL completo (mesa oficial + LLVM) sobre mesa-mini, para GPUs AMD
+# (radeonsi) o NVIDIA (nouveau) que lo exigen. Solo para quien lo necesita
+# (+~170MB): el default ligero no cambia. NVIDIA propietaria queda fuera a
+# proposito (exige match exacto con el modulo del host): usa el driver del host.
+cmd_gpu_stack() { # <gpu-amd|gpu-nvidia>
+    # Quitar el hold de la imagen (sed sin match = ya quitado: idempotente).
+    sed -i 's|^IgnorePkg   = mesa|#IgnorePkg   = mesa|' "$ARXY_ROOT/etc/pacman.conf"
+    # Sin --needed a proposito: mini y oficial comparten pkgname+version y
+    # --needed lo daria por satisfecho. Solo reinstala si falta LLVM.
+    local -a nc
+    nc_args nc
+    if ! run_pacman -Qq llvm-libs >/dev/null 2>&1; then
+        pacman_mut -S "${nc[@]}" mesa || die "gpu: pacman fallo"
+    fi
+    clean_pkg_cache
+    msg "gpu: stack completo instalado ($1)"
+}
+
 cmd_install() {
     if [[ "${1:-}" == "--aur" ]]; then
         shift
@@ -469,12 +487,19 @@ cmd_install() {
     need_root
     [[ $# -ge 1 ]] || die "uso: $PROG install <paquete...>  |  $PROG install --aur <paquete...>"
     ensure_image
+    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
+    local -a pkgs=()
+    local g
+    for g in "$@"; do
+        case "$g" in gpu-amd|gpu-nvidia) cmd_gpu_stack "$g" ;; *) pkgs+=("$g") ;; esac
+    done
+    [[ "${#pkgs[@]}" -gt 0 ]] || return 0
     local -a nc
     nc_args nc
-    pacman_mut -S --needed "${nc[@]}" "$@" || die "pacman fallo"
+    pacman_mut -S --needed "${nc[@]}" "${pkgs[@]}" || die "pacman fallo"
     clean_pkg_cache
     local p
-    for p in "$@"; do
+    for p in "${pkgs[@]}"; do
         [[ "$p" == -* ]] && continue
         cmd_export "$p" || true
     done
@@ -1139,6 +1164,18 @@ cmd_doctor() {
         echo "[OK]   nivel 2 (sin namespaces: ld-linux para run, chroot para install)"
     fi
     [[ -n "${ARXY_LEVEL:-}" ]] && msg "override manual: ARXY_LEVEL=$ARXY_LEVEL"
+    # GPU AMD/NVIDIA + mesa-mini (sin LLVM) = sin aceleracion HW.
+    # /sys directo (lspci puede no existir en hosts minimos).
+    local _v _gpu=""
+    for _v in /sys/class/drm/card*/device/vendor; do
+        [[ -f "$_v" ]] || continue
+        case "$(cat "$_v" 2>/dev/null)" in
+            *1002*|*10de*) _gpu=1 ;;
+        esac
+    done
+    if [[ -n "$_gpu" ]] && image_ok && run_pacman -Qi mesa 2>/dev/null | grep -q 'Unknown Packager'; then
+        msg "aviso GPU (AMD/NVIDIA): mesa-mini no acelera HW; '$PROG install gpu-amd' (o gpu-nvidia) instala el stack completo (+~170MB)"
+    fi
     return $ok
 }
 
@@ -1156,6 +1193,7 @@ $PROG $ARXY_VERSION — subsistema Arch minimalista (rápido, sin sandbox).
 Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
 
   install|i <pkg...>   instalar paquetes de Arch (+ crea lanzadores .desktop)
+  install gpu-amd|gpu-nvidia  stack GL completo para esas GPUs (+~170MB)
   install --aur <pkg>  instalar de AUR (precompilados -bin, motor paru)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)

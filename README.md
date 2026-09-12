@@ -106,8 +106,9 @@ operaciones chroot (la mtab de containers anidados no expone el rootfs);
 apps GTK/Qt con cachés de módulos de rutas absolutas son best-effort. Ni el nivel 1 (cero aislamiento) ni el 2
 son sandbox de seguridad: no ejecutes software no confiable.
 Mesa es mesa-mini sin LLVM (ahorra ~170MB): Intel iGPU y softpipe van;
-AMD/NVIDIA pierden aceleración HW (fallback a CPU). Verificado headless
-con eglinfo (softpipe en los 3 perfiles); en hardware real solo probado Intel.
+`arxy doctor` avisa si detecta AMD/NVIDIA y `arxy install gpu-amd` (o
+gpu-nvidia) instala el stack completo (+~170MB, quita el hold IgnorePkg).
+NVIDIA propietaria queda fuera (exige match con el modulo del host).
 Dedup: si una app modificara un fichero hardlinkeado afectaría a las demás
 que lo comparten; en `/usr` no ocurre en la práctica (pacman reemplaza
 ficheros al actualizar, no escribe in-place: el link se rompe solo).
