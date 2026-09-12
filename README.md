@@ -108,7 +108,8 @@ son sandbox de seguridad: no ejecutes software no confiable.
 Mesa es mesa-mini sin LLVM (ahorra ~170MB): Intel iGPU y softpipe van;
 `arxy doctor` avisa si detecta AMD/NVIDIA y `arxy install gpu-amd` (o
 gpu-nvidia) instala el stack completo (+~170MB, quita el hold IgnorePkg).
-NVIDIA propietaria queda fuera (exige match con el modulo del host).
+Ojo NVIDIA: solo nouveau (Mesa); propietaria no soportada en v1
+(rendimiento limitado sin ella).
 Dedup: si una app modificara un fichero hardlinkeado afectaría a las demás
 que lo comparten; en `/usr` no ocurre en la práctica (pacman reemplaza
 ficheros al actualizar, no escribe in-place: el link se rompe solo).

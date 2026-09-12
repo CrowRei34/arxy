@@ -1139,6 +1139,60 @@ cmd_which() { # <bin|ruta> : donde se resolveria (subsistema vs host)
     fi
 }
 
+# GPU discreta que mesa-mini (sin LLVM) no acelera: amd|nvidia|"". Via /sys
+# (lspci puede no existir en hosts minimos).
+detect_gpu() {
+    local v
+    for v in /sys/class/drm/card*/device/vendor; do
+        [[ -f "$v" ]] || continue
+        case "$(cat "$v" 2>/dev/null)" in
+            *1002*) echo amd; return 0 ;;
+            *10de*) echo nvidia; return 0 ;;
+        esac
+    done
+    return 1
+}
+
+is_mesa_mini() { # mini = build externo sin firma conocida
+    run_pacman -Qi mesa 2>/dev/null | grep -q '^Packager.*Unknown'
+}
+
+cmd_quickstart() { # el siguiente paso segun estado (para quien no lee READMEs)
+    echo "$PROG $ARXY_VERSION: tu siguiente paso es"
+    if ! image_ok; then
+        echo "  $PROG setup            # descarga el subsistema (~130MB)"
+        echo "Despues: $PROG install firefox && $PROG run firefox"
+        return 0
+    fi
+    local n g
+    n="$(ls "$REAL_APPS"/arxy-*.desktop 2>/dev/null | wc -l)"
+    if [[ "$n" -eq 0 ]]; then
+        echo "  $PROG install <app>    # p. ej. $PROG install firefox"
+    else
+        echo "  $PROG run <app>        # o desde el menu ($n lanzadores; $PROG list para ver)"
+    fi
+    g="$(detect_gpu || true)"
+    if [[ -n "$g" ]] && is_mesa_mini; then
+        echo "  ...y GPU $g: $PROG install gpu-$g para aceleracion HW (+~170MB)"
+    fi
+}
+
+# Aviso mesa-mini en AMD/NVIDIA (solo informa, nunca falla).
+# Funcion separada (no inline en doctor): el $() dentro de cmd_doctor
+# dispara un falso positivo SC2319 en shellcheck 0.11.
+doctor_gpu() {
+    local _g
+    _g="$(detect_gpu || true)"
+    [[ -n "$_g" ]] || return 0
+    image_ok || return 0
+    is_mesa_mini || return 0
+    if [[ "$_g" == nvidia ]]; then
+        msg "aviso GPU NVIDIA: solo nouveau via '$PROG install gpu-nvidia' (+~170MB); propietaria no soportada en v1 (rendimiento limitado)"
+    else
+        msg "aviso GPU AMD: mesa-mini no acelera HW; '$PROG install gpu-amd' instala el stack completo (+~170MB)"
+    fi
+}
+
 # --- doctor / version / ayuda
 cmd_doctor() {
     local ok=0
@@ -1167,18 +1221,7 @@ cmd_doctor() {
         echo "[OK]   nivel 2 (sin namespaces: ld-linux para run, chroot para install)"
     fi
     [[ -n "${ARXY_LEVEL:-}" ]] && msg "override manual: ARXY_LEVEL=$ARXY_LEVEL"
-    # GPU AMD/NVIDIA + mesa-mini (sin LLVM) = sin aceleracion HW.
-    # /sys directo (lspci puede no existir en hosts minimos).
-    local _v _gpu=""
-    for _v in /sys/class/drm/card*/device/vendor; do
-        [[ -f "$_v" ]] || continue
-        case "$(cat "$_v" 2>/dev/null)" in
-            *1002*|*10de*) _gpu=1 ;;
-        esac
-    done
-    if [[ -n "$_gpu" ]] && image_ok && run_pacman -Qi mesa 2>/dev/null | grep -q '^Packager.*Unknown'; then
-        msg "aviso GPU (AMD/NVIDIA): mesa-mini no acelera HW; '$PROG install gpu-amd' (o gpu-nvidia) instala el stack completo (+~170MB)"
-    fi
+    doctor_gpu
     return $ok
 }
 
@@ -1212,6 +1255,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
   doctor               verifica requisitos e imagen
+  quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
   rollback             restaura la imagen anterior a un setup
   version|help         muestra version / esta ayuda
@@ -1252,6 +1296,7 @@ case "$cmd" in
     export)                     cmd_export "$@" ;;
     unexport)                   cmd_unexport "$@" ;;
     doctor | check)             cmd_doctor "$@" ;;
+    quickstart | qs | start)    cmd_quickstart "$@" ;;
     setup | init)               cmd_setup "$@" ;;
     rollback)                   cmd_rollback "$@" ;;
     version | -v | --version)   cmd_version "$@" ;;
