@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.3.4"
+ARXY_VERSION="0.4.0"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -704,6 +704,58 @@ cmd_clean() {
     msg "cache limpia"
 }
 
+# Dedup por hardlinks: runtimes identicos entre apps (Electron) ocupan N
+# veces su tamaño; linkearlos ahorra sin coste de lectura ni FUSE.
+# pacman reemplaza ficheros al actualizar (no escribe in-place): el link se
+# rompe solo y cada app vuelve a ser independiente. Es correcto.
+# Si una app modificara un fichero linkeado afectaria a las demas; en /usr
+# no ocurre en la practica (ver README).
+# ponytail: nombres con \n quiebran el parseo (asumimos que /usr no los tiene); upgrade: find -print0 + cksum --zero.
+do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
+    local auto="${1:-}"
+    local start=$SECONDS saved=0 linked=0
+    local work
+    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    # shellcheck disable=SC2064
+    trap "rm -rf '$work'" RETURN
+    # cksum POSIX (stat -c no existe en BSD, find -printf no existe en busybox):
+    # CRC+tamaño en una pasada; sha256 solo confirma candidatos.
+    # -links 1 = idempotente (lo ya linkeado se salta solo); -type f excluye symlinks.
+    find "$ARXY_ROOT/usr" -type f -links 1 -exec cksum {} + 2>/dev/null | sort -k1,1n -k2,2n >"$work/all"
+    awk '{print $1, $2}' "$work/all" | uniq -d >"$work/dups"
+    local key size line h f first lasth
+    while read -r key; do
+        [[ -n "$key" ]] || continue
+        size="${key#* }"
+        awk -v k="$key" '$1" "$2 == k {sub(/^[^ ]+ [^ ]+ /,""); print}' "$work/all" >"$work/group"
+        [[ -s "$work/group" ]] || continue # hueco de carrera (fichero borrado entre find y hash): sin entrada no hay xargs colgado
+        first=""; lasth=""
+        while IFS= read -r line; do
+            h="${line%% *}"; f="${line#* }"; f="${f# }"; f="${f#\*}"
+            if [[ "$h" == "$lasth" && -n "$first" ]]; then
+                if ln -f "$first" "$f" 2>/dev/null; then
+                    saved=$((saved + size)); linked=$((linked + 1))
+                fi
+            else
+                first="$f"; lasth="$h"
+            fi
+        done < <(tr '\n' '\0' <"$work/group" | xargs -0 sha256sum 2>/dev/null | sort -k1,1)
+    done <"$work/dups"
+    local mb
+    mb="$(awk -v b="$saved" 'BEGIN{printf "%.1f", b/1048576}')"
+    if [[ -n "$auto" ]]; then
+        [[ "$saved" -ge 10485760 ]] && msg "dedup: $linked archivos linkeados, ${mb} MB ahorrados"
+    else
+        msg "dedup: $linked archivos linkeados, ${mb} MB ahorrados en $((SECONDS - start))s"
+    fi
+}
+
+cmd_dedup() {
+    need_root
+    ensure_image
+    do_dedup
+}
+
 # --- lectura (corre como usuario)
 cmd_info() {
     [[ $# -ge 1 ]] || die "uso: $PROG info <paquete>"
@@ -1064,6 +1116,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)
   clean                limpiar cache de pacman
+  dedup                hardlinkea ficheros identicos de /usr (ahorra disco)
   info <pkg>           info de un paquete (instalado o de repos)
   list|l               paquetes instalados ([desktop] = tiene lanzador)
   search|s <texto>     buscar en repos
@@ -1102,6 +1155,7 @@ case "$cmd" in
     remove | rm | uninstall)    cmd_remove "$@" ;;
     update | up | upgrade)      cmd_update "$@" ;;
     clean | clean-cache)        cmd_clean "$@" ;;
+    dedup)                      cmd_dedup "$@" ;;
     info | show)                cmd_info "$@" ;;
     list | l | ls | installed)  cmd_list "$@" ;;
     search | s | find)          cmd_search "$@" ;;
