@@ -2,7 +2,7 @@
 # Uso: copiar esta carpeta 'arxy/' a void-packages/srcpkgs/ y compilar:
 #   ./xbps-src pkg arxy
 pkgname=arxy
-version=0.2.0
+version=0.2.1
 revision=1
 archs="noarch"
 build_style=meta

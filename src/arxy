@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.2.0"
+ARXY_VERSION="0.2.1"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -131,7 +131,7 @@ bwrap_base() {
     if [[ -f "$resolv" ]]; then
         printf '%s\n' --ro-bind "$resolv" /etc/resolv.conf
     else
-        msg "aviso: sin resolv.conf valido en el host, el DNS dentro puede fallar"
+        msg "aviso: sin resolv.conf valido en el host, el DNS dentro puede fallar" >&2
     fi
     [[ -f /etc/hosts ]] && printf '%s\n' --ro-bind /etc/hosts /etc/hosts
     # La imagen trae /etc/machine-id Grennan ("uninitialized", 13 chars) y Qt/D-Bus
@@ -140,7 +140,7 @@ bwrap_base() {
     if [[ -s /etc/machine-id ]]; then
         printf '%s\n' --ro-bind /etc/machine-id /etc/machine-id
     else
-        msg "aviso: host sin machine-id valido, Qt/D-Bus dentro pueden abortar"
+        msg "aviso: host sin machine-id valido, Qt/D-Bus dentro pueden abortar" >&2
     fi
     [[ -f /etc/localtime ]] && printf '%s\n' --ro-bind-try /etc/localtime /etc/localtime
 }
