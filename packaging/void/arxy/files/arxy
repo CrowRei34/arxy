@@ -1309,7 +1309,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   list|l               paquetes instalados ([desktop] = tiene lanzador)
   search|s <texto>     buscar en repos
   search-aur|sa <txt>  buscar en AUR (paru o RPC; requiere jq)
-  run <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
+  run|r <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
   which|w <bin|ruta>    muestra donde se resolveria ([subsistema] o [host])
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
@@ -1320,7 +1320,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   rollback             restaura la imagen anterior a un setup
   version|help         muestra version / esta ayuda
 
-Atajos: i, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
+Atajos: i, r, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
   $PROG firefox   ==   $PROG run firefox
 
 Ejemplos:
@@ -1357,7 +1357,7 @@ case "$cmd" in
     search | s | find)          cmd_search "$@" ;;
     search-aur | sa)              cmd_search_aur "$@" ;;
     __install-file)               cmd_install_file "$@" ;;
-    run | exec | x)             cmd_run "$@" ;;
+    run | r | exec | x)          cmd_run "$@" ;;
     which | w)                  cmd_which "$@" ;;
     shell | sh | enter)         cmd_shell "$@" ;;
     export)                     cmd_export "$@" ;;
