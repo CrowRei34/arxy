@@ -693,18 +693,40 @@ cmd_update() {
     [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
 }
 
-cmd_clean() {
+# Limpieza: dry-run por defecto (informa), --apply ejecuta.
+# Solo borra regenerables (cache, builds, restos): jamas toca pacman.conf
+# (IgnorePkg y cia sobreviven) ni el rootfs.
+cmd_clean() { # [--apply]
     need_root
     ensure_image
-    local -a nc
-    nc_args nc
-    pacman_mut -Sc "${nc[@]}" || true
-    if [[ "$_ARXY_LEVEL" == 2 ]]; then
-        in_chroot /usr/bin/paccache -rk2 2>/dev/null || true
-    else
-        in_bwrap /usr/bin/paccache -rk2 2>/dev/null || true
+    local apply=""
+    [[ "${1:-}" == "--apply" ]] && apply=1
+    [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
+    local r p a d f
+    r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
+    p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"
+    a="-"; [[ -d "$ARXY_BUILD/aur" ]] && a="$(du -sh "$ARXY_BUILD/aur" 2>/dev/null | cut -f1)"
+    d="-"
+    for f in "$ARXY_DATA"/.arxy-dl.* "$ARXY_DATA"/.arxy-sha.*; do
+        [[ -e "$f" ]] || continue
+        d="$(du -shc "$ARXY_DATA"/.arxy-dl.* "$ARXY_DATA"/.arxy-sha.* 2>/dev/null | tail -1 | cut -f1)"
+        break
+    done
+    msg "rootfs: $r en $ARXY_ROOT"
+    msg "cache pacman: $p"
+    msg "builds AUR: $a en $ARXY_BUILD/aur"
+    msg "descargas huerfanas: $d"
+    if [[ -z "$apply" ]]; then
+        msg "nada tocado (dry-run); '$PROG clean --apply' para limpiar"
+        return 0
     fi
-    msg "cache limpia"
+    rm -f "$ARXY_ROOT"/var/cache/pacman/pkg/* 2>/dev/null || true
+    rm -rf "${ARXY_BUILD:?}/aur" 2>/dev/null || true
+    for f in "$ARXY_DATA"/.arxy-dl.* "$ARXY_DATA"/.arxy-sha.*; do
+        [[ -e "$f" ]] || continue
+        rm -f "$f"
+    done
+    msg "limpieza hecha"
 }
 
 # Dedup por hardlinks: runtimes identicos entre apps (Electron) ocupan N
@@ -1120,7 +1142,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   install --aur <pkg>  instalar de AUR (precompilados -bin, motor paru)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)
-  clean                limpiar cache de pacman
+  clean [--apply]   informa uso (rootfs/cache/AUR) y limpia con --apply
   dedup                hardlinkea ficheros identicos de /usr (ahorra disco)
   info <pkg>           info de un paquete (instalado o de repos)
   list|l               paquetes instalados ([desktop] = tiene lanzador)
