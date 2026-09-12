@@ -26,6 +26,20 @@ SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 # mas abajo; guardar solo nombres no sirve: el source ya los piso).
 declare -A _frozen_val=()
 while IFS= read -r _n; do _frozen_val["$_n"]="${!_n}"; done < <(compgen -e | grep '^ARXY_' || true)
+_restore_frozen() { # el env congelado manda sobre cualquier fichero.
+    # OJO: llamarlo ANTES de derivar (ARXY_DATA y cia cuelgan de ARXY_*);
+    # restaurar despues deja ROOT y DATA de mundos distintos (split-brain:
+    # setup extraia en el root aislado pero escribia version/level2-rc en
+    # el vivo, probado con ARXY_ROOT=/tmp/xyz).
+    local _n
+    if ((${#_frozen_val[@]})); then
+        for _n in "${!_frozen_val[@]}"; do
+            printf -v "$_n" '%s' "${_frozen_val[$_n]}"
+            # shellcheck disable=SC2163 # export indirecto intencionado (NAME=valor)
+            export "$_n"
+        done
+    fi
+}
 ARXY_ROOT="${ARXY_ROOT:-/var/lib/arxy/root}"
 ARXY_IMAGE_URL="${ARXY_IMAGE_URL:-}"
 ARXY_IMAGE_SHA256="${ARXY_IMAGE_SHA256:-}"
@@ -36,6 +50,7 @@ ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"
 [[ -r "$ARXY_SYS_CONF" ]] && . "$ARXY_SYS_CONF"
 # shellcheck source=/dev/null
 [[ -r "$ARXY_USER_CONF" ]] && . "$ARXY_USER_CONF"
+_restore_frozen
 
 ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
 ARXY_VERSION_FILE="$ARXY_DATA/version"
@@ -59,15 +74,9 @@ REAL_APPS="$REAL_HOME/.local/share/applications"
 if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
     # shellcheck source=/dev/null
     [[ -r "$REAL_HOME/.config/arxy/config" ]] && . "$REAL_HOME/.config/arxy/config"
+    _restore_frozen
 fi
-if ((${#_frozen_val[@]})); then
-    for _n in "${!_frozen_val[@]}"; do
-        printf -v "$_n" '%s' "${_frozen_val[$_n]}"
-        # shellcheck disable=SC2163 # export indirecto intencionado (NAME=valor)
-        export "$_n"
-    done
-fi
-unset _frozen_val _n
+unset _frozen_val
 
 LD_LINUX="$ARXY_ROOT/usr/lib/ld-linux-x86-64.so.2" # interprete ELF del subsistema
 ARXY_LIBPATH="$ARXY_ROOT/usr/lib"
