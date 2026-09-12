@@ -16,7 +16,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.3.1"
+ARXY_VERSION="0.3.2"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 
@@ -607,7 +607,12 @@ exec /usr/bin/cp "$@"
 SHIM
     chmod +x "$work_host/bin/bsdtar" "$work_host/bin/tar" "$work_host/bin/cp"
     local build_ok=0
-    in_bwrap /usr/bin/bash -c "export PATH='$work_ns/bin:$PATH'; cd '$work_ns' && exec /usr/bin/makepkg --config '$work_ns/makepkg-arxy.conf' --noconfirm --skippgpcheck" >&2 && build_ok=1
+    # Sin --skippgpcheck si el usuario lo pide (por defecto se omite: los
+    # keyservers caidos rompen builds que por lo demas estan bien).
+    local pgp_args="--skippgpcheck"
+    [[ -n "${ARXY_GPG_CHECK:-}" ]] && pgp_args=""
+    # shellcheck disable=SC2086 # $pgp_args vacio debe desaparecer, no llegar como ""
+    in_bwrap /usr/bin/bash -c "export PATH='$work_ns/bin:$PATH'; cd '$work_ns' && exec /usr/bin/makepkg --config '$work_ns/makepkg-arxy.conf' --noconfirm $pgp_args" >&2 && build_ok=1
     rm -rf "${work_host:?}/bin" # shims solo para este build: fuera siempre
     [[ $build_ok -eq 1 ]] || die "fallo al compilar $pkg"
     # Paquetes divididos (pkgbase con subpaquetes como bcompare-mate):

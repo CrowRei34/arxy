@@ -60,7 +60,7 @@ sudo arxy setup                # descarga la imagen (~220MB) y listo
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
 | `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo de salud |
-| `arxy rollback` | restaura la imagen anterior a un setup |
+| `arxy rollback` | restaura el rootfs completo al estado previo al último setup (se pierde lo instalado después) |
 | `axy` | alias corto de `arxy` |
 
 Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
@@ -84,7 +84,9 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
     `install` vía `chroot` con sudo. Para kernels hardened o containers
     donde bwrap no funciona. Sin FUSE en ningún nivel, por decisión:
     cada formato FUSE reintroduciría la dependencia que arxy elimina
-    (la imagen es un tarball plano, no squashfs/dwarfs).
+    (la imagen es un tarball plano, no squashfs/dwarfs). Tampoco hay
+    bundle monolítico estilo conty-*.sh: el rootfs extraído ya cubre
+    ambos niveles y mantener dos arquitecturas paralelas sería deuda.
 
 ## Límites honestos
 
@@ -92,8 +94,10 @@ Necesitan demonios root/systemd y **no** van dentro: TeamViewer, AnyDesk.
 `protonvpn-app` choca con el ProtonVPN del host (misma app single-instance
 en el bus compartido). Steam/umu-launcher sí van (multilib habilitado).
 En nivel 2: AUR no disponible (compilar exige namespaces: solo paquetes
-oficiales); `pacman -S/-U/-R` dentro de `arxy shell` está bloqueado a
-propósito (vería la DB del host: usa `arxy install/remove/update`;
+oficiales); AUR se compila con `--skippgpcheck` por defecto (los keyservers
+caídos rompen builds sanos; `ARXY_GPG_CHECK=1` exige verificación GPG);
+`pacman -S/-U/-R` dentro de `arxy shell` está bloqueado a propósito
+(vería la DB del host: usa `arxy install/remove/update`;
 solo cubre invocación por nombre, `/usr/bin/pacman` directo no intercepta;
 escape hatch `ARXY_ALLOW_RAW_PACMAN=1`); CheckSpace se desactiva en
 operaciones chroot (la mtab de containers anidados no expone el rootfs);
