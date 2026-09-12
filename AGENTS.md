@@ -64,6 +64,13 @@ Hardware real (Intel): `tests/test-hardware.sh` en este repo.
     siempre. Usar `test -x`.
     ← Fase 5, del propio `test-hardware.sh`.
 
+7. Despues de tocar resolucion de paths o env, verificar **mtimes del
+   estado vivo** (`$ARXY_DATA/*`). Los tests pasan con estado envenenado;
+   solo las mtimes lo delatan.
+   ← Fase 6 split-brain: `restore` tras derivar `ARXY_DATA/BUILD/VERSION_FILE`
+   → setup aislado escribia `version` y `level2-rc` en `/var/lib/arxy` vivo.
+   Reparado con `restore` como funcion tras cada `source`.
+
 ## Convenciones del repo `arxy` (el CLI)
 
 - Un commit por tarea, mensaje con el porque (no solo el que).
