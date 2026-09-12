@@ -402,6 +402,22 @@ cmd_setup() {
                 chmod 666 "$stage/dev/$name" 2>/dev/null || true
         fi
     done
+    # El usuario real debe resolverse dentro (getpwuid): Electron y varias
+    # apps abortan si su uid no esta en /etc/passwd (pear-desktop:
+    # uv_os_get_passwd ENOENT). Se copia su linea del host al staging
+    # (virgen: sin riesgo de duplicados). Solo passwd+grupo primario.
+    if [[ "$REAL_USER" != "root" ]]; then
+        local _hu _hg _gid
+        _hu="$(grep "^$REAL_USER:" /etc/passwd 2>/dev/null || true)"
+        if [[ -n "$_hu" ]] && ! grep -q "^$REAL_USER:" "$stage/etc/passwd" 2>/dev/null; then
+            printf '%s\n' "$_hu" >> "$stage/etc/passwd"
+        fi
+        _gid="$(id -g "$REAL_USER" 2>/dev/null || true)"
+        _hg="$(getent group "${_gid:-}" 2>/dev/null || true)"
+        if [[ -n "$_hg" ]] && ! grep -q "^${_hg%%:*}:" "$stage/etc/group" 2>/dev/null; then
+            printf '%s\n' "$_hg" >> "$stage/etc/group"
+        fi
+    fi
     _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
     # Rotar: actual -> .old (rollback de una generacion), staging -> actual.
     rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
