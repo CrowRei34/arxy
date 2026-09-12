@@ -198,8 +198,17 @@ run_pacman() {
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
         # Sin namespaces: el pacman del subsistema con rutas explicitas.
         # Solo lecturas; lo que escribe va por pacman_mut (chroot).
-        in_sys /usr/bin/pacman --root "$ARXY_ROOT" --config "$ARXY_ROOT/etc/pacman.conf" \
+        # Los Include absolutos (/etc/pacman.d/...) resolverian en el HOST:
+        # se reescriben al rootfs en conf efimera (ruta fija: mismo contenido
+        # en llamadas concurrentes, se regenera siempre).
+        mkdir -p "$ARXY_ROOT/tmp" 2>/dev/null || true
+        local _ro="$ARXY_ROOT/tmp/pacman-arxy-ro.conf"
+        sed "s|/etc/pacman.d/|$ARXY_ROOT/etc/pacman.d/|g" "$ARXY_ROOT/etc/pacman.conf" > "$_ro" 2>/dev/null || return 1
+        in_sys /usr/bin/pacman --root "$ARXY_ROOT" --config "$_ro" \
             --dbpath "$ARXY_ROOT/var/lib/pacman" "$@"
+        local _rc=$?
+        rm -f "$_ro"
+        return $_rc
     else
         in_bwrap /usr/bin/pacman "$@"
     fi
@@ -1195,6 +1204,54 @@ doctor_gpu() {
     fi
 }
 
+# Chequeos con arreglo: informan siempre, reparan con --fix. Lo destructivo
+# (db.lck) exige tty+confirmacion; rollback pendiente solo se sugiere.
+# 'ok' es el local de cmd_doctor (scope dinamico de bash: se ve sin declarar).
+doctor_fix() { # [--fix]
+    local fix=""
+    [[ "${1:-}" == "--fix" ]] && fix=1
+    if [[ -n "$fix" && "$(id -u)" -ne 0 ]]; then
+        msg "'$PROG doctor --fix' necesita root para aplicar; solo informo"
+        fix=""
+    fi
+    # Hold: solo importa con mini (con mesa oficial sobra a proposito).
+    if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+        msg "falta hold IgnorePkg=mesa: un update traeria mesa oficial +170MB"
+        ok=1
+        if [[ -n "$fix" ]]; then
+            printf '\nIgnorePkg   = mesa\n' >> "$ARXY_ROOT/etc/pacman.conf" && msg "hold añadido"
+        fi
+    fi
+    local lock="$ARXY_ROOT/var/lib/pacman/db.lck"
+    if [[ -f "$lock" ]]; then
+        # ¿pacman real en curso? Por comm de /proc, no por cmdline (pgrep -f
+        # se auto-detecta: nuestra propia linea de comandos menciona pacman).
+        local _run="" _pc
+        for _pc in /proc/[0-9]*/comm; do
+            [[ -f "$_pc" ]] || continue
+            [[ "$(cat "$_pc" 2>/dev/null)" == pacman ]] && { _run=1; break; }
+        done
+        if [[ -n "$_run" ]]; then
+            msg "db.lck presente con pacman en curso: normal"
+        else
+            msg "db.lck sin pacman visible: stale probable"
+            ok=1
+            if [[ -n "$fix" ]]; then
+                if [[ -t 0 ]]; then
+                    local ans
+                    read -r -p "¿borrar $lock? [s/N] " ans
+                    [[ "$ans" == [sS]* ]] && { rm -f "$lock" && msg "lock borrado"; }
+                else
+                    msg "sin tty: borralo a mano si ningun pacman corre"
+                fi
+            fi
+        fi
+    fi
+    if [[ -d "$ARXY_ROOT.old" ]]; then
+        msg "rollback pendiente: '$PROG rollback' restaura, o borra $ARXY_ROOT.old"
+    fi
+}
+
 # --- doctor / version / ayuda
 cmd_doctor() {
     local ok=0
@@ -1224,6 +1281,7 @@ cmd_doctor() {
     fi
     [[ -n "${ARXY_LEVEL:-}" ]] && msg "override manual: ARXY_LEVEL=$ARXY_LEVEL"
     doctor_gpu
+    doctor_fix "${1:-}"
     return $ok
 }
 
@@ -1256,7 +1314,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
-  doctor               verifica requisitos e imagen
+  doctor [--fix]      verifica requisitos e imagen (y repara con --fix)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
   rollback             restaura la imagen anterior a un setup
