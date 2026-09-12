@@ -28,9 +28,18 @@ Comprobar: `arxy doctor`.
 
 ## Instalación
 
-**Void Linux** (recomendado): copiar `packaging/void/arxy/` a
-`void-packages/srcpkgs/` y `xbps-src pkg arxy`, o pedirlo donde
-distribuyas tus paquetes.
+**Void Linux** (recomendado, desde z-repo):
+
+```bash
+echo "repository=https://srdicov.github.io/z-repo/x86_64" | sudo tee /etc/xbps.d/20-zrepo.conf
+yes | sudo xbps-install -S   # importa la llave del repo (solo la primera vez)
+sudo xbps-install -y arxy
+sudo arxy setup              # descarga la imagen (~220MB) y listo
+```
+
+En Void musl usa `.../z-repo/x86_64-musl` en la primera línea.
+Empaquetado manual: copiar `packaging/void/arxy/` a
+`void-packages/srcpkgs/` y `xbps-src pkg arxy`.
 
 **Cualquier distro:**
 
