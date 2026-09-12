@@ -338,6 +338,7 @@ cmd_setup() {
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA"
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
+    install -d -m1777 "$ARXY_BUILD/aur" # idem para workdirs (si lo crea root, el usuario no puede escribir)
     local tmp sha_tmp
     tmp="$(mktemp "$ARXY_DATA/.arxy-dl.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
@@ -502,12 +503,18 @@ cmd_install_aur() {
         if ! as_root "$SELF" __install-file "$f"; then
             msg "error: fallo al instalar $p (sigo con el resto)"
             failed+=("$p")
+            continue
         fi
+        # Exito: el workdir ya no sirve (el .pkg esta instalado). En fallo se
+        # conserva para depurar. Charset validado: $p podria escapar de aur/.
+        [[ "$p" =~ ^[a-zA-Z0-9@._+-]+$ ]] && rm -rf "${ARXY_BUILD:?}/aur/$p" 2>/dev/null || true
     done
     if [[ "${#failed[@]}" -gt 0 ]]; then
         die "fallaron: ${failed[*]}"
     fi
-    [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
+    # Hook como usuario sin $ARXY_DATA escribible: salto silencioso (el proximo
+    # install/update como root ya cubre todo /usr; avisar aqui seria ruido).
+    [[ -w "$ARXY_DATA" && -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
     msg "instalado (AUR): $*"
 }
 
@@ -750,7 +757,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     local auto="${1:-}"
     local start=$SECONDS saved=0 linked=0
     local work=""
-    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX")" 2>/dev/null || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)"; return 0; }
+    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX" 2>/dev/null)" || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)"; return 0; }
     trap '[[ -n "${work:-}" ]] && rm -rf "$work"' RETURN EXIT
     # cksum POSIX (stat -c no existe en BSD, find -printf no existe en busybox):
     # CRC+tamaño en una pasada; sha256 solo confirma candidatos.
