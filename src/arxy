@@ -470,6 +470,10 @@ cmd_setup() {
         echo "url=$ARXY_IMAGE_URL"
         echo "date=$(date -u +%FT%TZ)"
     } > "$ARXY_VERSION_FILE"
+    # Copia dentro del rootfs: el rollback rota dirs pero no este fichero;
+    # sin la copia, `version` mentiria tras un rollback (regla 3).
+    mkdir -p "$ARXY_ROOT/var/lib/arxy" || die "no pude registrar version en el rootfs"
+    cp -f "$ARXY_VERSION_FILE" "$ARXY_ROOT/var/lib/arxy/version" || die "no pude registrar version en el rootfs"
     msg "sincronizando bases de pacman..."
     pacman_mut -Sy || die "pacman -Sy fallo"
     msg "imagen lista en $ARXY_ROOT"
@@ -486,6 +490,14 @@ cmd_rollback() {
         mv "$aside" "$ARXY_ROOT.old"
     else
         mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "rollback fallo"
+    fi
+    # El version file vive fuera del root y el swap no lo mueve: restaurar
+    # la copia que viajo dentro del rootfs (regla 3 tambien vale tras
+    # rollback). Sin fuente (rootfs viejo o borrado a mano), se conserva
+    # el actual sin avisar: uso manual fuera de contrato.
+    if [[ -f "$ARXY_ROOT/var/lib/arxy/version" ]]; then
+        cp -f "$ARXY_ROOT/var/lib/arxy/version" "$ARXY_VERSION_FILE" 2>/dev/null || \
+            msg "aviso: rollback hecho pero no pude restaurar el version file"
     fi
     msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
 }
