@@ -1290,6 +1290,17 @@ cmd_version() {
     if [[ -f "$ARXY_VERSION_FILE" ]]; then
         tr '\n' ' ' <"$ARXY_VERSION_FILE"; echo
     fi
+    [[ "${1:-}" == "--verbose" ]] || return 0
+    [[ -z "${2:-}" ]] || die "uso: $PROG version [--verbose]"
+    level
+    echo "nivel: $_ARXY_LEVEL (1=bwrap, 2=sin namespaces)"
+    echo "gpu: $(detect_gpu || echo 'no discreta (intel o softpipe)')"
+    echo "rootfs: $(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1) en $ARXY_ROOT"
+    if grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+        echo "hold mesa-mini: activo"
+    else
+        echo "hold mesa-mini: ausente"
+    fi
 }
 
 cmd_help() {
@@ -1318,7 +1329,8 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
   rollback             restaura la imagen anterior a un setup
-  version|help         muestra version / esta ayuda
+  version [--verbose]  version CLI+imagen (verbose: nivel/GPU/tamaño/hold)
+  help                 esta ayuda
 
 Atajos: i, r, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
   $PROG firefox   ==   $PROG run firefox
