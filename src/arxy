@@ -1151,10 +1151,11 @@ cmd_which() { # <bin|ruta> : donde se resolveria (subsistema vs host)
 }
 
 # GPU discreta que mesa-mini (sin LLVM) no acelera: amd|nvidia|"". Via /sys
-# (lspci puede no existir en hosts minimos).
+# (lspci puede no existir en hosts minimos). ARXY_SYS_DRM_PATH inyecta un
+# /sys falso para tests sin hardware (ver tests/test-gpu-drm.sh).
 detect_gpu() {
-    local v
-    for v in /sys/class/drm/card*/device/vendor; do
+    local base="${ARXY_SYS_DRM_PATH:-/sys/class/drm}" v
+    for v in "$base"/card*/device/vendor; do
         [[ -f "$v" ]] || continue
         case "$(cat "$v" 2>/dev/null)" in
             *1002*) echo amd; return 0 ;;
