@@ -57,8 +57,9 @@ re-ejecuta con `sudo`.
 ## Límites honestos (léeme si vienes de AMD/NVIDIA)
 
 - **AMD/NVIDIA: no probado en hardware.** `arxy doctor` avisa si detecta
-  discreta e `install gpu-amd` / `gpu-nvidia` instala el stack completo
-  (+~170MB, quita el hold `IgnorePkg=mesa`). La vía existe; el dato no.
+  discreta e `install gpu-amd` / `gpu-nvidia` instala el `mesa` oficial
+  (con LLVM; el default `mesa-mini` no lo trae) quitando el hold
+  `IgnorePkg=mesa` (+~170MB). La vía existe; el dato no.
 - **NVIDIA propietaria: fuera de v1.** Solo nouveau (Mesa).
 - **Intel iGPU y softpipe: verificados** (HD 630 acelerado, sin LLVM).
 - **AUR: solo nivel 1** (compilar exige namespaces); solo `-bin`
