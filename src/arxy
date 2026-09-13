@@ -946,7 +946,17 @@ cmd_search_aur() {
 }
 
 pkg_desktops() { # <pkg> -> rutas /usr/share/applications/*.desktop dentro de la imagen
-    run_pacman -Qlq "$1" 2>/dev/null | grep '^/usr/share/applications/[^/]*\.desktop$' || true
+    # L2: pacman --root prefija cada ruta con $ARXY_ROOT (en L1 salen
+    # peladas): se recorta el prefijo para que el grep vea lo mismo.
+    # ← ciclo 6.5.5 en Void-musl (L2): install/export decia "sin .desktop"
+    # para todo paquete (Alacritty.desktop, org.xfce.mousepad.desktop).
+    local f base
+    while IFS= read -r f; do
+        f="${f#$ARXY_ROOT}"
+        base="${f##*/}"
+        [[ "$f" == "/usr/share/applications/$base" && "$base" == *.desktop ]] && printf '%s\n' "$f"
+    done < <(run_pacman -Qlq "$1" 2>/dev/null || true)
+    return 0
 }
 
 desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
