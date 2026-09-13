@@ -28,7 +28,7 @@ En Void musl usa `.../z-repo/x86_64-musl`. Empaquetado manual: copiar
 instalador necesita el layout del repo):
 
 ```bash
-git clone https://github.com/SrDicov/arxy && cd arxy
+git clone https://github.com/SrDicov/arxy && cd arxy   # necesitas `git`
 sudo ./install.sh              # a /usr/local (arxy + axy)
 sudo arxy setup                # descarga la imagen y listo
 ```
