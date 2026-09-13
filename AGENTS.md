@@ -72,6 +72,11 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
    ← Fase 5: shim `bsdtar` rompía AUR ("Failed to open 'v'").
 7. `file://` no acepta espacios en la ruta
    ← 6.1: la matrix falló 21 checks por espacios en el path local.
+8. L2 rompe asunciones de L1 sobre formato de output de herramientas
+   (rutas prefijadas por `--root`, etc.). Todo path parsing en
+   `pkg_desktops` y similares debe funcionar en ambas formas
+   ← 6.5.5: `-Qlq` con `--root` devuelve `/var/lib/arxy/root/usr/…`;
+   `grep ^/usr/` ciego en L2. En L1 pelado. Matrix L1 jamás lo vio.
 
 ## No resucitar sin contexto
 
