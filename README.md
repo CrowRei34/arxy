@@ -29,7 +29,7 @@ instalador necesita el layout del repo):
 
 ```bash
 git clone https://github.com/SrDicov/arxy && cd arxy   # necesitas `git`
-sudo ./install.sh              # a /usr/local (arxy + axy)
+sudo ./install.sh              # a /usr/local (arxy + axy; si ya eres root, omite `sudo`)
 sudo arxy setup                # descarga la imagen y listo
 ```
 
