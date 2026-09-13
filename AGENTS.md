@@ -78,6 +78,11 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
    ← 6.5.5: `-Qlq` con `--root` devuelve `/var/lib/arxy/root/usr/…`;
    `grep ^/usr/` ciego en L2. En L1 pelado. Matrix L1 jamás lo vio.
 
+**Cobertura pendiente post-v1.0.0:** la matrix no ejercita `export`
+bajo L2 ni instala paquetes con `.desktop` en L2. El caso se validó
+en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
+*← 3884404 se cazó por ciclo desde cero, no por CI.*
+
 ## No resucitar sin contexto
 
 - Imagen plana `.tar.zst` (DwarFS/SquashFS descartados: complejidad sin

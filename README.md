@@ -104,6 +104,10 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
   Ubuntu-privilegiado): `arxy-image/tests/matrix.sh` — assertions de
   contenido, no solo rc (25–28 checks según nivel y flags: rama libc,
   autodetección L2 y chroot `MATRIX_WRITE2=1` son condicionales).
+  Cubre L1 completo (install/run/export/remove) y L2 en lecturas +
+  guards AUR; L2 en escritura se ejercita con `MATRIX_WRITE2=1`
+  (install/remove sin `.desktop`). Export bajo L2, pendiente de
+  cobertura (validado a mano en el ciclo 6.5.5).
   El CI la corre en cada build de imagen.
 - **Hardware real** (Intel HD 630): `tests/test-hardware.sh` — dbus
   L1+L2, iris acelerado, softpipe sin LLVM, app Electron con ventana
