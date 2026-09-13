@@ -34,7 +34,8 @@ sudo arxy setup                # descarga la imagen y listo
 ```
 
 Imagen local (probar un build propio): `ARXY_IMAGE_URL=file:///ruta/al.tar.zst`
-(nota: `file://` no acepta espacios en la ruta).
+(nota: `file://` no acepta espacios en la ruta). Instalación por pipe
+(`curl | bash`): en roadmap (v1.x); hoy hay que clonar.
 
 Requisitos del host: `bash bwrap curl tar zstd xz gzip file` +
 `bash>=4.4`. Comprobar: `arxy doctor`.
@@ -100,7 +101,9 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
 
 - **Matrix en 5 distros** (Alpine, Chimera, Void, Ubuntu,
   Ubuntu-privilegiado): `arxy-image/tests/matrix.sh` — assertions de
-  contenido, no solo rc. El CI la corre en cada build de imagen.
+  contenido, no solo rc (25–28 checks según nivel y flags: rama libc,
+  autodetección L2 y chroot `MATRIX_WRITE2=1` son condicionales).
+  El CI la corre en cada build de imagen.
 - **Hardware real** (Intel HD 630): `tests/test-hardware.sh` — dbus
   L1+L2, iris acelerado, softpipe sin LLVM, app Electron con ventana
   real. (`dbus-send` no viene en la mini: ese check da SKIP honesto;
