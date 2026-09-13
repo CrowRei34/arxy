@@ -4,7 +4,7 @@
 ![license](https://img.shields.io/badge/license-MIT-green)
 
 ```bash
-sudo arxy setup                  # primera vez: descarga Arch mínimo (~128MB)
+sudo arxy setup                  # primera vez: descarga Arch mínimo (~128MB, ~490MB en disco)
 arxy quickstart                  # te dice el siguiente paso
 arxy install telegram-desktop    # repos oficiales (+ lanzador en tu menú)
 arxy install --aur spotify       # AUR precompilado (-bin)
@@ -89,6 +89,7 @@ re-ejecuta con `sudo`.
 | `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
 | `arxy export --all` | regenerar lanzadores del menú |
 | `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo |
+| `arxy quickstart` | te dice el siguiente paso según estado |
 | `arxy dedup` | hardlinkea idénticos de `/usr` (auto tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
 | `axy` | alias corto de `arxy` |
 
@@ -114,8 +115,9 @@ bash -n src/arxy install.sh && shellcheck -S warning src/arxy install.sh
 ```
 
 `src/arxy` y `config/arxy.conf` son canónicos; `packaging/void/arxy/files/`
-son copias para xbps (el CI verifica que son idénticas). Corre
-`tests/matrix.sh` antes de commit (ver `arxy-image/tests/README.md`).
+son copias para xbps (el CI verifica que son idénticas). Corre la matrix
+del repo hermano `arxy-image` (`tests/matrix.sh`) antes de commit
+(ver `arxy-image/tests/README.md`).
 Lee `AGENTS.md`: tiene las reglas que cazaron bugs reales.
 
 ## Licencia
