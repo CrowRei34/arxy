@@ -104,6 +104,7 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - `doctor --json` lleva `"format": 1` desde el día 1; añadir campos es
   compatible, renombrar/quitar exige `format: 2`. Schema exacto: comentario
   en `lib/60-hw.sh` (única fuente, sin `.md` que derive).
+- `hardware.json` es caché, no fuente: `doctor --json` calcula fresco.
 - Mocks de detección (tests sin root ni imagen, patrón `ARXY_SYS_DRM_PATH`):
   `ARXY_SYS_ROOT` (prefijo /proc+/sys), `ARXY_DEV_PATH` (defecto /dev),
   `ARXY_LIB_DIR`/`ARXY_LIB64_DIR` (loaders), `ARXY_SYS_DRM_PATH` (drm).

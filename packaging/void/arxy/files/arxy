@@ -474,6 +474,9 @@ cmd_setup() {
     # sin la copia, `version` mentiria tras un rollback (regla 3).
     mkdir -p "$ARXY_ROOT/var/lib/arxy" || die "no pude registrar version en el rootfs"
     cp -f "$ARXY_VERSION_FILE" "$ARXY_ROOT/var/lib/arxy/version" || die "no pude registrar version en el rootfs"
+    # Perfil HW persistido (caché del mismo schema; doctor calcula fresco).
+    # Antes del -Sy: describe lo instalado aunque falle la red. Nunca falla setup.
+    write_hardware_json "$(emit_hardware_json 2>/dev/null || true)"
     msg "sincronizando bases de pacman..."
     pacman_mut -Sy || die "pacman -Sy fallo"
     msg "imagen lista en $ARXY_ROOT"
@@ -1244,6 +1247,8 @@ is_mesa_mini() { # mini = build externo sin firma conocida
 # usable,reason}, kmods=[...ordenado], dev={dri:[...],nvidia:[...],
 # fuse:str|null}, rootfs={path,present,version:date|null}, fixes_available=[...],
 # fixes_applied=[]. Añadir campos OK; renombrar/quitar no (ver AGENTES.md).
+# fixes_available hoy: [hold-mesa]; futuros: nvidia-align, musl-glibc-stack,
+# gpu-full-stack (Fase 4).
 # Salidas componibles sin jq: kmods en una línea (espacios), dev_nodes una
 # ruta por línea, el resto valor único o vacío. Mocks (patrón ARXY_SYS_DRM_PATH):
 #   ARXY_SYS_ROOT=""  prefijo de /proc y /sys (falso en tests)
@@ -1427,6 +1432,7 @@ cmd_version() {
     else
         echo "hold mesa-mini: ausente"
     fi
+    show_hardware_profile
 }
 
 # --- doctor --json (superficie pública versionada, format 1) ---
@@ -1437,6 +1443,7 @@ json_str() { # <texto> -> "texto" con \ " y controles escapados
     local s="${1//\\/\\\\}"
     s="${s//\"/\\\"}"
     s="${s//$'\n'/\\n}"; s="${s//$'\r'/\\r}"; s="${s//$'\t'/\\t}"
+    s="${s//$'\b'/\\b}"; s="${s//$'\f'/\\f}"
     printf '"%s"' "$s"
 }
 json_bool() { # 1|0 -> true|false
@@ -1469,18 +1476,20 @@ probe_userns() { # 1 si hay namespaces sin root (misma prueba que doctor)
     echo 0
 }
 probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin restos)
+    # El mount vive en el ns muerto del unshare: nunca cuelga en el host.
+    # El RETURN trap cubre la muerte a mitad (solo queda un dir en /tmp).
     command -v unshare >/dev/null 2>&1 || { echo 0; return 0; }
     local t
     t="$(mktemp -d 2>/dev/null || true)"
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { rm -rf "$t"; echo 0; return 0; }
+    trap 'rm -rf "$t"' RETURN
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; return 0; }
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
     else
         echo 0
     fi
-    rm -rf "$t"
     return 0
 }
 probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12
@@ -1503,6 +1512,13 @@ cmd_doctor_json() { # [--fix] : --fix se ignora (solo se lista); JSON a stdout
     elif [[ -n "${1:-}" ]]; then
         die "uso: $PROG doctor [--fix|--json]"
     fi
+    emit_hardware_json
+    return $?
+}
+
+# Núcleo reutilizable (doctor --json y hardware.json de setup): emite el
+# JSON a stdout y devuelve el ok de doctor (para json=$(...) + rc).
+emit_hardware_json() {
     local ok=0 c
     for c in bwrap curl tar zstd sha256sum awk sed grep mktemp su; do
         command -v "$c" >/dev/null 2>&1 || ok=1
@@ -1545,6 +1561,8 @@ cmd_doctor_json() { # [--fix] : --fix se ignora (solo se lista); JSON a stdout
     printf ', "overlayfs_rootless": %s' "$(json_bool "$(probe_overlayfs)")"
     printf ', "mount_setattr": %s' "$(json_bool "$(probe_mount_setattr)")"
     printf ', "seccomp": %s' "$(json_bool "$(probe_seccomp)")"
+    printf ', "mount_setattr_method": "kernel-version>=5.12"'
+    printf ', "seccomp_method": "kernel-version>=3.17"'
     printf ', "landlock": {"available": %s, "abi": null}' "$(json_bool "$(probe_landlock)")"
     printf ', "gpu": {"vendor": "%s", "driver": null, "render_node": %s}' "$gv" "$(json_str_or_null "$rn")"
     printf ', "nvidia": {"present": %s, "version": %s, "usable": %s, "reason": %s}' \
@@ -1558,6 +1576,73 @@ cmd_doctor_json() { # [--fix] : --fix se ignora (solo se lista); JSON a stdout
     printf ', "fixes_available": %s' "$( { tr ' ' '\n' <<<"$fixes" | grep . | sort || true; } | json_arr)"
     printf ', "fixes_applied": []}\n'
     return $ok
+}
+
+# Perfil persistido (Commit 3): hardware.json es CACHÉ del mismo schema,
+# escrita por setup; doctor --json siempre calcula fresco, nunca la lee.
+write_hardware_json() { # <json> : atómico + solo-si-cambia; nunca falla setup
+    local json="$1" f="$ARXY_DATA/hardware.json" tmp old
+    [[ -n "$json" ]] || return 0
+    mkdir -p "$ARXY_DATA" 2>/dev/null || { msg "aviso: sin $ARXY_DATA, omito hardware.json" >&2; return 0; }
+    if [[ -f "$f" ]]; then
+        old="$(cat "$f" 2>/dev/null || true)"
+        [[ "$old" == "$json" ]] && return 0 # idéntico: preserva mtime (T13c)
+    fi
+    tmp="$(mktemp "$ARXY_DATA/.hardware.json.XXXXXX" 2>/dev/null || true)"
+    [[ -n "$tmp" ]] || { msg "aviso: sin temporal para hardware.json" >&2; return 0; }
+    printf '%s\n' "$json" >"$tmp" 2>/dev/null || { rm -f "$tmp"; msg "aviso: no pude escribir hardware.json" >&2; return 0; }
+    chmod 0644 "$tmp" 2>/dev/null || true
+    sync "$tmp" 2>/dev/null || sync 2>/dev/null || true # durabilidad best-effort
+    mv -f "$tmp" "$f" 2>/dev/null || { rm -f "$tmp"; msg "aviso: no pude publicar hardware.json" >&2; return 0; }
+    return 0
+}
+
+print_profile_block() { # <json> <origen> : bloque "hardware:" (grep, sin jq)
+    local j="$1" src="$2" v
+    echo "hardware: $src (format 1)"
+    v="$(sed -n 's/.*"libc": {"kind": "\([^"]*\)", "version": \([^,}]*\)}.*/\1 \2/p' <<<"$j" | head -n 1 || true)"
+    v="${v//\"/}"; [[ "$v" == *" null" ]] && v="${v% null}"
+    echo "  libc: ${v:-desconocida}"
+    v="$(sed -n 's/.*"kernel": {"arch": \([^,}]*\), "release": \([^}]*\)}.*/\1 \2/p' <<<"$j" | head -n 1 || true)"
+    v="${v//\"/}"; [[ "$v" == *" null" ]] && v="${v% null}"
+    echo "  kernel: ${v:-desconocido}"
+    v="$(sed -n 's/.*"gpu": {"vendor": "\([^"]*\)", "driver": [^,]*, "render_node": \([^}]*\)}.*/\1 \2/p' <<<"$j" | head -n 1 || true)"
+    v="${v//\"/}"; [[ "$v" == *" null" ]] && v="${v% null}"
+    echo "  gpu: ${v:-desconocida}"
+    v="$(sed -n 's/.*"nvidia": {"present": \([a-z]*\), "version": \([^,]*\), "usable": \([a-z]*\), "reason": "\([^"]*\)"}.*/\1 \2 \3 \4/p' <<<"$j" | head -n 1 || true)"
+    v="${v//\"/}"
+    if [[ "$v" == false* ]]; then echo "  nvidia: no presente";
+    else echo "  nvidia: ${v#* }"; fi
+    v="$(sed -n 's/.*"kmods": \[\([^]]*\)\].*/\1/p' <<<"$j" | head -n 1 | tr -d '"[]' | tr ',' ' ' | tr -s ' ' || true)"
+    echo "  kmods:${v:+ $v}"
+    return 0
+}
+
+show_hardware_profile() { # bloque perfil en version --verbose (fichero o fresco)
+    local f="$ARXY_DATA/hardware.json" j="" from=""
+    if [[ -f "$f" ]] && j="$(cat "$f" 2>/dev/null)" && [[ "$j" == *'"format": 1'* ]]; then
+        from="$f"
+        local klive ksaved nlive nsaved
+        klive="$(uname -r 2>/dev/null || true)"
+        ksaved="$(sed -n 's/.*"kernel": {[^}]*"release": \([^,}]*\)}.*/\1/p' <<<"$j" | head -n 1 | tr -d '"' || true)"
+        [[ -n "$klive" && -n "$ksaved" && "$klive" != "$ksaved" ]] && \
+            msg "aviso: kernel actual ($klive) difiere del perfil ($ksaved)" >&2
+        nlive="$(detect_nvidia_ver || true)"
+        nsaved="$(sed -n 's/.*"nvidia": {[^}]*"version": \([^,}]*\)}.*/\1/p' <<<"$j" | head -n 1 | tr -d '"' || true)"
+        [[ "$nlive" != "$nsaved" ]] && \
+            msg "aviso: nvidia actual (${nlive:-ausente}) difiere del perfil (${nsaved:-ausente})" >&2
+    else
+        if [[ -f "$f" ]]; then
+            msg "aviso: hardware.json corrupto o con otro format; perfil fresco en memoria" >&2
+        else
+            msg "aviso: sin hardware.json (lo crea setup); perfil fresco en memoria" >&2
+        fi
+        j="$(emit_hardware_json 2>/dev/null || true)"
+        from="memoria"
+        [[ -z "$j" ]] && { msg "aviso: no se pudo calcular el perfil" >&2; return 0; }
+    fi
+    print_profile_block "$j" "$from"
+    return 0
 }
 
 cmd_help() {

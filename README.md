@@ -100,6 +100,11 @@ arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
 # {"nivel": 1, "libc": "glibc", "gpu": "intel"}  (format: 1, estable)
 ```
 
+`setup` persiste ese perfil en `/var/lib/arxy/hardware.json` (caché,
+`format: 1`, atómico y solo-si-cambia): `version --verbose` lo lee y avisa
+si el kernel o nvidia cambiaron; `doctor --json` siempre calcula fresco.
+Refrescar sin `setup`, pendiente.
+
 Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
 (usuario); todo admite override por variable de entorno (`ARXY_*`).
 

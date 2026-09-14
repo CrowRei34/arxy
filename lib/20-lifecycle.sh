@@ -119,6 +119,9 @@ cmd_setup() {
     # sin la copia, `version` mentiria tras un rollback (regla 3).
     mkdir -p "$ARXY_ROOT/var/lib/arxy" || die "no pude registrar version en el rootfs"
     cp -f "$ARXY_VERSION_FILE" "$ARXY_ROOT/var/lib/arxy/version" || die "no pude registrar version en el rootfs"
+    # Perfil HW persistido (caché del mismo schema; doctor calcula fresco).
+    # Antes del -Sy: describe lo instalado aunque falle la red. Nunca falla setup.
+    write_hardware_json "$(emit_hardware_json 2>/dev/null || true)"
     msg "sincronizando bases de pacman..."
     pacman_mut -Sy || die "pacman -Sy fallo"
     msg "imagen lista en $ARXY_ROOT"
