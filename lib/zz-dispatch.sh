@@ -30,6 +30,7 @@ case "$cmd" in
     quickstart | qs | start)    cmd_quickstart "$@" ;;
     setup | init)               cmd_setup "$@" ;;
     rollback)                   cmd_rollback "$@" ;;
+    host-bridge)                cmd_host_bridge "$@" ;;
     version | -v | --version)   cmd_version "$@" ;;
     help | -h | --help)         cmd_help "$@" ;;
     -*)                         die "flag desconocida: $cmd. Prueba: $PROG help" ;;

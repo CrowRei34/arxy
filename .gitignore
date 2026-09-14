@@ -1,0 +1,2 @@
+# Binario C del host-bridge (se compila con `make bridge`, no se commitea).
+bridge/arxy-bridged

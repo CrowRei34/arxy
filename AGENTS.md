@@ -21,7 +21,8 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   instalador lo lee del clon); `config/arxy.conf` canónico;
   `packaging/void/…/files/` son copias manuales para xbps.
 - Flujo: editar solo lib/ → `make sync` (regenera + copia a packaging) →
-  commitear todo junto (lint falla si algo va desfasado).
+  commitear todo junto (lint falla si algo va desfasado). Tests que usan
+  el binario (`$BIN`, `src/arxy`) siempre DESPUÉS de sync (stale miente).
 - Matrix con assertions de **contenido** (`grep`), nunca solo rc
   ← Fase 4: bugs mudos con rc=0 (lecturas L2, AUR roto).
 - `pacman` siempre `--noconfirm` vía `nc_args`; nunca `LD_LIBRARY_PATH`
@@ -75,7 +76,8 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 ## Tech debt grepeable
 
 - `ponytail:` en comentarios = atajo deliberado con techo conocido y
-  upgrade path. `grep -rn 'ponytail:' lib/ tests/` lista la deuda viva.
+  upgrade path. `grep -rn 'ponytail:' lib/ tests/ bridge/` lista la
+  deuda viva.
 - Límites permanentes: `OUT-OF-SCOPE.md` (vivo: cada `ponytail:` o
   desviación se registra ahí; si no está, no existe).
 - Re-exec con privilegios (`need_root`, `as_root`) pasa `ARXY_*` por

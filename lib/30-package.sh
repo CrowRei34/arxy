@@ -114,7 +114,8 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     if [[ "${#aur[@]}" -gt 0 && -z "${ARXY_GAMING_AUR_DONE:-}" ]]; then
         die "parte AUR pendiente como root (makepkg prohibe root): completala como usuario: $PROG install --aur ${aur[*]}"
     fi
-    # Flag interno (sin exportarlo en tu shell: salta la parte AUR).
+    # Flag interno de cadena (no exportarlo en tu shell: salta la parte
+    # AUR; y no renombrarlo con '_': need_root solo propaga ^ARXY_).
     unset ARXY_GAMING_AUR_DONE
     msg "gaming listo: $vendor (arxy-gaming-$vendor)"
 }

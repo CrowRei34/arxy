@@ -7,13 +7,18 @@
 LIB = lib/00-head.sh lib/10-level.sh lib/20-lifecycle.sh lib/30-package.sh \
       lib/35-gpu.sh \
       lib/40-query.sh lib/41-desktop.sh lib/50-run.sh lib/60-hw.sh \
-      lib/70-help.sh lib/zz-dispatch.sh
+      lib/70-help.sh lib/80-bridge.sh lib/zz-dispatch.sh
 
 src/arxy: $(LIB) Makefile
 	cat $(LIB) > $@.tmp
 	chmod +x $@.tmp
 	bash -n $@.tmp
 	mv $@.tmp $@
+
+# Daemon host-bridge (Fase 5): binario C aparte (no va en src/arxy).
+bridge/arxy-bridged: bridge/arxy-bridged.c
+	cc -O2 -Wall -Wextra -Werror -o $@ $<
+bridge: bridge/arxy-bridged
 
 .PHONY: check sync
 check: src/arxy

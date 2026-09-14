@@ -111,6 +111,18 @@ run_in() {
             b+=(--ro-bind-data "$_nfd" "$_d/$(basename "$_ip")")
         done <<<"$_nvi"
     fi
+    # Bridge (Fase 5): si el daemon corre, su socket entra a
+    # /run/arxy-bridge.sock con ARXY_BRIDGE_SOCKET apuntando dentro (nunca
+    # al path del host). Sin socket: ni bind ni env (cero regresion).
+    local _bsock=""
+    if [[ -n "${XDG_RUNTIME_DIR:-}" && -S "$XDG_RUNTIME_DIR/arxy-bridge.sock" ]]; then
+        _bsock="$XDG_RUNTIME_DIR/arxy-bridge.sock"
+    elif [[ -S "/tmp/arxy-bridge-${UID}.sock" ]]; then
+        _bsock="/tmp/arxy-bridge-${UID}.sock"
+    fi
+    if [[ -n "$_bsock" ]]; then
+        b+=(--bind "$_bsock" /run/arxy-bridge.sock --setenv ARXY_BRIDGE_SOCKET /run/arxy-bridge.sock)
+    fi
     exec bwrap "${b[@]}" \
         --setenv PATH "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
         "$@"

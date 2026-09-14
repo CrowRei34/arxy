@@ -10,9 +10,11 @@
 //  2. resolve_cmd rechaza relativo con '/' y componentes PATH no absolutos.
 //  3. Strict JSON: claves desconocidas y basura tras '}' se rechazan.
 //  4. \u subrogados se combinan (huérfanos se rechazan).
-// HARDENING (no bloqueante): TOCTOU realpath->execv, EINTR en drenaje
-// final, padding base64 interior laxo, off-by-one 65/64 en parse (inocuo:
-// authorize() limita a MAXARGS).
+// HARDENING (no bloqueante):
+// ponytail: TOCTOU realpath->execv; upgrade: openat2 RESOLVE_* o fexecve.
+// ponytail: EINTR en drenaje final; upgrade: reintentar read en [done].
+// ponytail: padding base64 interior laxo; upgrade: exigir '=' solo al final.
+// ponytail: off-by-one 65/64 en parse (inocuo: authorize() limita a MAXARGS).
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700

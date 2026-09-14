@@ -200,6 +200,14 @@ if grep -q 'ERROR:bad request' <<<"$out"; then
 else
     fail "depth-65: esperado ERROR:bad request, obtenido [$out]"
 fi
+# --- 9b. frontera exacta en 64 (semantica del limite: 64 OK, 65 fuera) ---
+deep64="$(python3 -c "print('{\"type\":\"request\",\"command\":[' + '\"x\",'*65 + '['*64 + '1' + ']'*64 + ']}')")"
+out="$(python3 "$TMPD/bc.py" rawjson "$SOCK" "$deep64")"
+if grep -q 'ERROR:too many arguments' <<<"$out"; then
+    pass "64 niveles exactos aceptados"
+else
+    fail "depth-64: esperado ERROR:too many arguments, obtenido [$out]"
+fi
 
 # --- 10. resolve_cmd: relativo con '/' rechazado ---
 out="$(python3 "$TMPD/bc.py" req "$SOCK" '{"type":"request","command":["./bin/echo","hi"]}')"
@@ -225,16 +233,22 @@ else
 fi
 
 # --- 12. resolve_cmd: PATH con '.' fail-closed (reinicia daemon) ---
+oldpid="$SRVPID"
 kill "$SRVPID" 2>/dev/null || true
 sleep 0.3
-PATH=".:/usr/local/sbin:/usr/local/bin:/usr/bin:/sbin:/bin" "$BIN" --socket "$SOCK" --allowed-cmd /bin/echo --allowed-cmd /bin/sh >"$LOG" 2>&1 &
-SRVPID=$!
-sleep 0.5
-out="$(python3 "$TMPD/bc.py" req "$SOCK" '{"type":"request","command":["echo","hi"]}')"
-if grep -q 'not allowed' <<<"$out"; then
-    pass "PATH con . rechaza todo lookup"
+# Sin daemon viejo vivo (si siguiera, el test mentiria con el PATH anterior)
+if kill -0 "$oldpid" 2>/dev/null; then
+    fail "restart: el daemon viejo no murio"
 else
-    fail "resolve-pathdot: esperado not allowed, obtenido [$out]"
+    PATH=".:/usr/local/sbin:/usr/local/bin:/usr/bin:/sbin:/bin" "$BIN" --socket "$SOCK" --allowed-cmd /bin/echo --allowed-cmd /bin/sh >"$LOG" 2>&1 &
+    SRVPID=$!
+    sleep 0.5
+    out="$(python3 "$TMPD/bc.py" req "$SOCK" '{"type":"request","command":["echo","hi"]}')"
+    if grep -q 'not allowed' <<<"$out"; then
+        pass "PATH con . rechaza todo lookup"
+    else
+        fail "resolve-pathdot: esperado not allowed, obtenido [$out]"
+    fi
 fi
 # daemon sano de vuelta (PATH limpio) para lo que sigue
 kill "$SRVPID" 2>/dev/null || true

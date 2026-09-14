@@ -18,6 +18,8 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   search|s <texto>     buscar en repos
   search-aur|sa <txt>  buscar en AUR (paru o RPC; requiere jq)
   run|r <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
+  host-bridge [--daemon|--stop|--status] [--socket P] [--allowed-cmd BIN...]
+                       daemon host-bridge (Fase 5; sin allowlist no arranca)
   which|w <bin|ruta>    muestra donde se resolveria ([subsistema] o [host])
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop

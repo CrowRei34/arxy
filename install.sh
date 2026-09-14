@@ -8,16 +8,21 @@
 #   DESTDIR=/tmp/pkg PREFIX=/usr ./install.sh   # empaquetado
 #
 # Instala: bin/arxy (+ symlink axy) y etc/arxy.conf.
+# Con el daemon host-bridge salvo --without-bridge (Fase 5).
 # La configuracion existente NO se sobrescribe (se deja .nuevo al lado).
 
 set -euo pipefail
 
 PREFIX="${PREFIX:-/usr/local}"
 DESTDIR="${DESTDIR:-}"
+WITH_BRIDGE=1
+if [[ "${1:-}" == "--without-bridge" ]]; then WITH_BRIDGE=""; fi
+
 SRC_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")"
 
 BIN_DST="$DESTDIR$PREFIX/bin"
 CONF_DST="$DESTDIR/etc/arxy"
+LIB_DST="$DESTDIR$PREFIX/lib/arxy"
 
 need_cmd() { command -v "$1" >/dev/null 2>&1 || { echo "falta '$1' en el host" >&2; exit 1; }; }
 
@@ -32,6 +37,12 @@ done
 install -d -m755 "$BIN_DST" "$CONF_DST"
 install -m755 "$SRC_DIR/src/arxy" "$BIN_DST/arxy"
 ln -sf arxy "$BIN_DST/axy"
+if [[ -n "$WITH_BRIDGE" ]]; then
+    [[ -f "$SRC_DIR/bridge/arxy-bridged" ]] || { echo "sin bridge/arxy-bridged (ejecuta 'make bridge' o repite con --without-bridge)" >&2; exit 1; }
+    install -d -m755 "$LIB_DST"
+    install -m755 "$SRC_DIR/bridge/arxy-bridged" "$LIB_DST/arxy-bridged"
+    echo "arxy-bridged en $LIB_DST"
+fi
 if [[ -f "$CONF_DST/arxy.conf" && -z "$DESTDIR" ]]; then
     install -m644 "$SRC_DIR/config/arxy.conf" "$CONF_DST/arxy.conf.nuevo"
     echo "arxy instalado; tu /etc/arxy/arxy.conf se conserva (nuevo en arxy.conf.nuevo)"
