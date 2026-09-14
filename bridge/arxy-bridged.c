@@ -5,11 +5,11 @@
 // C11/POSIX, solo libc, sin dependencias externas.
 // Uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]
 // DEUDA Fase 5 (auditoría pre-commit; el spike se commitea tal cual):
-// BLOQUEANTE antes de exponer a input no confiable:
-//  1. jskip recursivo sin tope (DoS por stack overflow con JSON anidado).
-//  2. PATH relativo en resolve_cmd (bypass de allowlist con '.' en PATH).
-//  3. Acepta basura tras '}' y claves desconocidas (strictness JSON).
-//  4. \u subrogados sin combinar (UTF-8 mal formado).
+// BLOQUEANTES resueltos en Commit 14 (con tests en test-bridge.sh):
+//  1. jskip con tope JSON_MAX_DEPTH (era recursivo sin tope).
+//  2. resolve_cmd rechaza relativo con '/' y componentes PATH no absolutos.
+//  3. Strict JSON: claves desconocidas y basura tras '}' se rechazan.
+//  4. \u subrogados se combinan (huérfanos se rechazan).
 // HARDENING (no bloqueante): TOCTOU realpath->execv, EINTR en drenaje
 // final, padding base64 interior laxo, off-by-one 65/64 en parse (inocuo:
 // authorize() limita a MAXARGS).
@@ -158,6 +158,34 @@ static void mexit(int fd, int code) {
 typedef struct { const char *p, *end; } J;
 static void jws(J *j) { while (j->p < j->end && isspace((uint8_t)*j->p)) j->p++; }
 // string JSON -> buffer malloc con len (puede traer NUL via \u0000); NULL si malformado
+static int jhex4(J *j, unsigned *v) { // 4 hex del \u (0 si malformado)
+    unsigned r = 0;
+    if (j->end - j->p < 4) return 0;
+    for (int k = 0; k < 4; k++) {
+        char h = j->p[k];
+        r <<= 4;
+        if (h >= '0' && h <= '9') r |= (unsigned)(h - '0');
+        else if (h >= 'a' && h <= 'f') r |= (unsigned)(h - 'a' + 10);
+        else if (h >= 'A' && h <= 'F') r |= (unsigned)(h - 'A' + 10);
+        else return 0;
+    }
+    j->p += 4;
+    *v = r;
+    return 1;
+}
+static int jput(char **o, size_t *n, size_t *cap, const char *t, int tn) {
+    for (int k = 0; k < tn; k++) {
+        if (*n + 1 >= *cap) {
+            *cap *= 2;
+            char *no = realloc(*o, *cap);
+            if (!no) return 0;
+            *o = no;
+        }
+        (*o)[(*n)++] = t[k];
+    }
+    return 1;
+}
+// string JSON -> buffer malloc con len (puede traer NUL via \u0000); NULL si malformado
 static char *jstr(J *j, size_t *ln) {
     if (j->p >= j->end || *j->p != '"') return NULL;
     j->p++;
@@ -174,24 +202,21 @@ static char *jstr(J *j, size_t *ln) {
             char e = *j->p++;
             if (e == 'u') {
                 unsigned v = 0;
-                if (j->end - j->p < 4) { free(o); return NULL; }
-                for (int k = 0; k < 4; k++) {
-                    char h = j->p[k];
-                    v <<= 4;
-                    if (h >= '0' && h <= '9') v |= (unsigned)(h - '0');
-                    else if (h >= 'a' && h <= 'f') v |= (unsigned)(h - 'a' + 10);
-                    else if (h >= 'A' && h <= 'F') v |= (unsigned)(h - 'A' + 10);
-                    else { free(o); return NULL; }
-                }
-                j->p += 4;
-                char tmp[3]; int tn; // \u0000 deja NUL: lo detecta authorize
-                if (v < 0x80) { tmp[0] = (char)v; tn = 1; }
+                if (!jhex4(j, &v)) { free(o); return NULL; }
+                char tmp[4]; int tn; // \u0000 deja NUL: lo detecta authorize
+                if (v >= 0xD800 && v <= 0xDBFF) {
+                    unsigned lo = 0; // alto: exige \uDC00-\uDFFF detrás
+                    if (j->end - j->p < 6 || j->p[0] != '\\' || j->p[1] != 'u') { free(o); return NULL; }
+                    j->p += 2;
+                    if (!jhex4(j, &lo) || lo < 0xDC00 || lo > 0xDFFF) { free(o); return NULL; }
+                    unsigned cp = 0x10000u + ((v & 0x3FFu) << 10) + (lo & 0x3FFu);
+                    tmp[0] = (char)(0xF0 | (cp >> 18)); tmp[1] = (char)(0x80 | ((cp >> 12) & 63));
+                    tmp[2] = (char)(0x80 | ((cp >> 6) & 63)); tmp[3] = (char)(0x80 | (cp & 63)); tn = 4;
+                } else if (v >= 0xDC00 && v <= 0xDFFF) { free(o); return NULL; } // bajo huérfano
+                else if (v < 0x80) { tmp[0] = (char)v; tn = 1; }
                 else if (v < 0x800) { tmp[0] = (char)(0xC0 | (v >> 6)); tmp[1] = (char)(0x80 | (v & 63)); tn = 2; }
                 else { tmp[0] = (char)(0xE0 | (v >> 12)); tmp[1] = (char)(0x80 | ((v >> 6) & 63)); tmp[2] = (char)(0x80 | (v & 63)); tn = 3; }
-                for (int k = 0; k < tn; k++) {
-                    if (n + 1 >= cap) { cap *= 2; char *no = realloc(o, cap); if (!no) { free(o); return NULL; } o = no; }
-                    o[n++] = tmp[k];
-                }
+                if (!jput(&o, &n, &cap, tmp, tn)) { free(o); return NULL; }
                 continue;
             }
             if (e == '"') c = '"'; else if (e == '\\') c = '\\'; else if (e == '/') c = '/';
@@ -218,7 +243,9 @@ static int jlit(J *j, const char *w) { // consume literal si matchea
     j->p += n;
     return 1;
 }
-static int jskip(J *j) { // salta cualquier valor (solo para claves que ignoramos)
+#define JSON_MAX_DEPTH 64 // tope anti-DoS (frame acota input, esto acota stack)
+static int jskip(J *j, int depth) { // salta cualquier valor (solo overflow de command)
+    if (depth > JSON_MAX_DEPTH) return 0;
     jws(j);
     if (j->p >= j->end) return 0;
     if (*j->p == '"') { size_t l; char *s = jstr(j, &l); free(s); return s != NULL; }
@@ -234,7 +261,7 @@ static int jskip(J *j) { // salta cualquier valor (solo para claves que ignoramo
                 if (j->p >= j->end || *j->p != ':') return 0;
                 j->p++;
             }
-            if (!jskip(j)) return 0;
+            if (!jskip(j, depth + 1)) return 0;
             jws(j);
             if (j->p >= j->end) return 0;
             if (*j->p == ',') { j->p++; continue; }
@@ -298,7 +325,7 @@ static int parse_req(const uint8_t *b, size_t n, Req *r) {
                         r->clen = nl;
                     }
                     r->cmd[r->ncmd] = v; r->clen[r->ncmd] = l; r->ncmd++;
-                } else { if (!jskip(&j)) { free(k); return -1; } r->ncmd++; }
+                } else { if (!jskip(&j, 0)) { free(k); return -1; } r->ncmd++; }
                 jws(&j);
                 if (j.p >= j.end) { free(k); return -1; }
                 if (*j.p == ',') { j.p++; jws(&j); continue; }
@@ -315,27 +342,34 @@ static int parse_req(const uint8_t *b, size_t n, Req *r) {
             size_t l; char *v = jstr(&j, &l);
             if (!v) { free(k); return -1; }
             free(r->data); r->data = v; r->datalen = l;
-        } else if (!jskip(&j)) { free(k); return -1; }
+        } else { free(k); return -1; } // strict: clave desconocida fuera
         free(k); jws(&j);
         if (j.p >= j.end) return -1;
         if (*j.p == ',') { j.p++; jws(&j); continue; }
         if (*j.p == '}') { j.p++; break; }
         return -1;
     }
+    jws(&j);
+    if (j.p != j.end) return -1; // strict: basura tras '}' fuera
     return r->type[0] ? 0 : -1;
 }
 
 // ---------- allowlist ----------
 static char *resolve_cmd(const char *name) { // canoniza: PATH + realpath + regular + X_OK
     char *cand = NULL;
-    if (strchr(name, '/')) cand = strdup(name);
-    else {
+    if (strchr(name, '/')) {
+        if (name[0] != '/') return NULL; // relativo con '/': fuera (./x, a/b, ../x)
+        cand = strdup(name);
+    } else {
         const char *path = getenv("PATH");
         if (!path || !*path) path = "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin";
         const char *d = path;
         for (;;) {
             const char *e = strchr(d, ':');
             size_t dl = e ? (size_t)(e - d) : strlen(d);
+            // fail-closed: componente vacio, relativo o '.' envenena la
+            // resolucion (depende del CWD del daemon); todo el lookup falla.
+            if (dl == 0 || d[0] != '/') return NULL;
             char *t = malloc(dl + 1 + strlen(name) + 1);
             if (!t) return NULL;
             memcpy(t, d, dl); t[dl] = '/'; strcpy(t + dl + 1, name);

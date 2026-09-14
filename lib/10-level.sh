@@ -16,6 +16,12 @@ bwrap_base() {
         printf '%s\n' --bind-try "$d" "$d"
     done
     [[ -d "$ARXY_BUILD" ]] && printf '%s\n' --bind "$ARXY_BUILD" "$NS_BUILD"
+    # Entorno grafico del host fuera: dentro esas rutas no existen y el
+    # loader crashea (VK_DRIVER_FILES de una sesion rompio vulkaninfo).
+    printf '%s\n' \
+        --unsetenv VK_DRIVER_FILES \
+        --unsetenv VK_ICD_FILENAMES \
+        --unsetenv LIBGL_DRIVERS_PATH
     printf '%s\n' \
         --bind /tmp /tmp \
         --bind /run /run \

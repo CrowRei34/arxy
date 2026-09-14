@@ -180,6 +180,12 @@ bwrap_base() {
         printf '%s\n' --bind-try "$d" "$d"
     done
     [[ -d "$ARXY_BUILD" ]] && printf '%s\n' --bind "$ARXY_BUILD" "$NS_BUILD"
+    # Entorno grafico del host fuera: dentro esas rutas no existen y el
+    # loader crashea (VK_DRIVER_FILES de una sesion rompio vulkaninfo).
+    printf '%s\n' \
+        --unsetenv VK_DRIVER_FILES \
+        --unsetenv VK_ICD_FILENAMES \
+        --unsetenv LIBGL_DRIVERS_PATH
     printf '%s\n' \
         --bind /tmp /tmp \
         --bind /run /run \
@@ -956,6 +962,8 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     if [[ "${#aur[@]}" -gt 0 && -z "${ARXY_GAMING_AUR_DONE:-}" ]]; then
         die "parte AUR pendiente como root (makepkg prohibe root): completala como usuario: $PROG install --aur ${aur[*]}"
     fi
+    # Flag interno (sin exportarlo en tu shell: salta la parte AUR).
+    unset ARXY_GAMING_AUR_DONE
     msg "gaming listo: $vendor (arxy-gaming-$vendor)"
 }
 

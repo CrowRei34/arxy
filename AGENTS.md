@@ -78,6 +78,12 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   upgrade path. `grep -rn 'ponytail:' lib/ tests/` lista la deuda viva.
 - Límites permanentes: `OUT-OF-SCOPE.md` (vivo: cada `ponytail:` o
   desviación se registra ahí; si no está, no existe).
+- Re-exec con privilegios (`need_root`, `as_root`) pasa `ARXY_*` por
+  `arxy_env_pass()` (única fuente; un sudo pelado opera sobre el
+  rootfs por defecto).
+- Shims de build AUR en `aur_build` (canónicos: `bsdtar`, `tar`, `cp`,
+  `install`): desactivan chown/ownership (EINVAL en userns). Nuevo
+  shim solo con caso real + test en solitario.
 - Mocks GPU (patrón `ARXY_SYS_DRM_PATH`, probativos: sin mock → vacío):
   `ARXY_SYS_ROOT` (reutilizado para `/proc/driver/nvidia` y
   `/sys/module/nvidia`; NO hay `ARXY_NVIDIA_SYSFS_PATH` separado),
