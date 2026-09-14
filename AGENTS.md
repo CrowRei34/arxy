@@ -63,6 +63,14 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   vienen con `--dev-bind /dev`); `musl-glibc-stack` instala el ICD
   Vulkan del vendor (`gpu_stack_pkgs()`, unica fuente para would_do y
   apply; GL/DRI ya lo trae mesa-mini).
+- gaming (`install arxy-gaming --dry-run` informa sin root): rewrite
+  exacto a dependencias reales (`arxy_gaming_pkgs()`, NO fusionar con
+  `gpu_stack_pkgs()` de doctor: minimo Vulkan vs gaming completo);
+  `-bin` parte a AUR (convencion del repo); mesa full via
+  `cmd_gpu_stack` (mismo pkgname+version que mini: sin `--needed`);
+  `[multilib]` se habilita idempotente; PKGBUILDs en `packaging/aur/`
+  espejan la lista bash (sincronizar al publicar; sin base: nunca se
+  publica `arxy-gaming` pelado).
 
 ## Tech debt grepeable
 

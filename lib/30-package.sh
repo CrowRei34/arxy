@@ -25,7 +25,97 @@ cmd_gpu_stack() { # <gpu-amd|gpu-nvidia>
     msg "gpu: stack completo instalado (${1:-})"
 }
 
+# --- meta-paquete gaming: rewrite a dependencias reales (no existe en AUR
+# como paquete; los PKGBUILDs de packaging/aur/ son drafts para publicar).
+# gpu_stack_pkgs() (doctor --fix) = minimo Vulkan; arxy_gaming_pkgs() =
+# gaming completo. Distintas a proposito: no unificar.
+arxy_gaming_vendor() { # nvidia|amd|intel ("" + rc 1 = sin GPU decidible)
+    local v dri
+    v="$(detect_gpu || true)"
+    case "$v" in
+        nvidia)
+            # Propietario solo si el modulo responde (nouveau no sirve).
+            [[ -r "${ARXY_SYS_ROOT:-}/proc/driver/nvidia/version" ]] && { echo nvidia; return 0; }
+            return 1 ;;
+        amd) echo amd; return 0 ;;
+        *)
+            # Sin discreta con dri expuesto se asume Intel (la iGPU no
+            # reporta vendor a drm; mismo criterio que hardware.json).
+            dri="$(detect_dev_nodes 2>/dev/null | grep -E '/(card[0-9]+|renderD[0-9]+)$' || true)"
+            [[ -n "$dri" ]] && { echo intel; return 0; }
+            return 1 ;;
+    esac
+}
+
+arxy_gaming_pkgs() { # <vendor> : un paquete por linea (gaming completo)
+    local v="$1" ver
+    # Lista canonica en bash (los PKGBUILDs la espejan para publicar).
+    # libva-*/intel-media-driver fuera: decode de video, no rendering.
+    printf '%s\n' steam wine vkd3d gamescope mangohud vulkan-icd-loader lib32-vulkan-icd-loader
+    case "$v" in
+        nvidia)
+            ver="$(detect_nvidia_ver || true)"
+            [[ -n "$ver" ]] || die "NVIDIA sin version legible (¿nouveau?)"
+            printf '%s\n' "nvidia-utils=$ver" "lib32-nvidia-utils=$ver" ;;
+        amd) printf '%s\n' mesa lib32-mesa vulkan-radeon lib32-vulkan-radeon ;;
+        *) printf '%s\n' mesa lib32-mesa vulkan-intel lib32-vulkan-intel ;;
+    esac
+    # AUR (-bin) al final: el llamador parte por sufijo (convencion del repo).
+    printf '%s\n' proton-ge-custom-bin dxvk-bin
+    return 0
+}
+
+cmd_gaming() { # [--dry-run] : gaming completo para la GPU del host
+    local dry=""
+    [[ "${1:-}" == "--dry-run" ]] && dry=1
+    local vendor
+    if ! vendor="$(arxy_gaming_vendor)"; then
+        [[ "$(detect_gpu || true)" == nvidia ]] && \
+            die "NVIDIA sin driver propietario (¿nouveau?): arxy-gaming exige el modulo propietario"
+        die "GPU no detectada (sin drm/dri): instala a mano, p. ej. '$PROG install --aur arxy-gaming-intel'"
+    fi
+    local -a pkgs=()
+    mapfile -t pkgs < <(arxy_gaming_pkgs "$vendor")
+    if [[ -n "$dry" ]]; then
+        echo "vendor detectado: $vendor"
+        echo "meta-paquete: arxy-gaming -> arxy-gaming-$vendor (draft en packaging/aur/, aun no publicado)"
+        echo "paquetes (instalaria):"
+        printf '  %s\n' "${pkgs[@]}"
+        is_mesa_mini 2>/dev/null && echo "conflictos: mesa-mini seria reemplazado por mesa"
+        echo "nada tocado (dry-run)"
+        return 0
+    fi
+    need_root
+    ensure_image
+    # [multilib] para lib32-* (idempotente; mismo idioma sed que el hold).
+    sed -i -E '/^#\[multilib\]/,/^#?Include/s/^#//' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null || true
+    cmd_gpu_stack "arxy-gaming-$vendor" # mesa full idempotente (amd/intel/nvidia)
+    local -a off=() aur=() p
+    for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
+    [[ "${#off[@]}" -gt 0 ]] && cmd_install "${off[@]}"
+    [[ "${#aur[@]}" -gt 0 ]] && cmd_install --aur "${aur[@]}"
+    msg "gaming listo: $vendor (arxy-gaming-$vendor)"
+}
+
 cmd_install() {
+    # Rewrite arxy-gaming (meta-paquete virtual): va primero para que
+    # --dry-run informe sin root (como doctor --fix). El resto de args
+    # sigue su curso normal tras el gaming (o se ignora en dry-run).
+    local -a _rest=()
+    local _g _dry="" _want=""
+    for _g in ${1+"$@"}; do
+        case "$_g" in
+            arxy-gaming) _want=1 ;;
+            --dry-run) _dry=1 ;;
+            *) _rest+=("$_g") ;;
+        esac
+    done
+    if [[ -n "$_want" ]]; then
+        if [[ -n "$_dry" ]]; then cmd_gaming --dry-run; else cmd_gaming; fi
+        local _rc=$?
+        [[ -n "$_dry" || "${#_rest[@]}" -eq 0 ]] && return $_rc
+        set -- "${_rest[@]}"
+    fi
     if [[ "${1:-}" == "--aur" ]]; then
         shift
         cmd_install_aur "$@"

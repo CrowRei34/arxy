@@ -6,6 +6,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
 
   install|i <pkg...>   instalar paquetes de Arch (+ crea lanzadores .desktop)
   install gpu-amd|gpu-nvidia  stack GL completo para esas GPUs (+~170MB)
+  install arxy-gaming [--dry-run]  stack gaming segun GPU (rewrite a arxy-gaming-<vendor>)
   install --aur <pkg>  instalar de AUR (precompilados -bin, motor paru)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)
