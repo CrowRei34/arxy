@@ -110,3 +110,6 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
   `ARXY_SYS_ROOT` (prefijo /proc+/sys), `ARXY_DEV_PATH` (defecto /dev),
   `ARXY_LIB_DIR`/`ARXY_LIB64_DIR` (loaders), `ARXY_SYS_DRM_PATH` (drm).
 - Tests con sh -c + funciones de lib/: export -f funciones y export de vars, o llamadas directas (3 bugs esta sesion por no hacerlo).
+- Kills deterministas en tests: overrides de funcion (curl/tar/mv/rm) que matan
+  tras la fase + `kill -9 $BASHPID` (`$$` es el padre: mataria el test, no el
+  subshell) ← Commit 6: `mv` que mata EN VEZ DE mover no prueba nada.

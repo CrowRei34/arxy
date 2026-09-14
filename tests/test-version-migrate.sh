@@ -6,7 +6,8 @@ set -uo pipefail
 FAIL=0
 HERE="$(dirname "$0")"
 ARXY_ROOT="/tmp/vtestm/root"
-export ARXY_ROOT
+ARXY_VERSION_FILE="/tmp/vtestm/version" # default vive en el root; aislar por env
+export ARXY_ROOT ARXY_VERSION_FILE
 # shellcheck source=../lib/00-head.sh
 . "$HERE/../lib/00-head.sh" >/dev/null 2>&1
 # shellcheck source=../lib/60-hw.sh

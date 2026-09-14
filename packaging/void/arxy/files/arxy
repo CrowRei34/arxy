@@ -53,7 +53,13 @@ ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"
 _restore_frozen
 
 ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
-ARXY_VERSION_FILE="$ARXY_DATA/version"
+# version DENTRO del root (Commit 6): nace en el staging y el rename la
+# publica junto a la imagen — nunca hay root nuevo con version vieja ni al
+# reves, y el rollback la rota sola. El env manda (tests la aislan).
+: "${ARXY_VERSION_FILE:=$ARXY_ROOT/var/lib/arxy/version}"
+# Ruta pre-Commit 6 (fuera del root): solo se lee para adoptar una vez y
+# borrar; el codigo nuevo jamas la escribe (una sola verdad).
+: "${ARXY_VERSION_LEGACY:=$ARXY_DATA/version}"
 ARXY_BUILD="$ARXY_DATA/build"              # dir de compilacion AUR (1777)
 NS_BUILD="/arxy-build"                     # misma dir vista desde dentro
 
@@ -135,7 +141,8 @@ nc_args() {
 }
 
 ensure_image() {
-    if image_ok; then migrate_version_file; return 0; fi
+    recover_staging || true # huerfanos de kills: reparar nunca bloquea el arranque
+    if image_ok; then ensure_version; migrate_version_file; return 0; fi
     msg "imagen no encontrada en $ARXY_ROOT, descargando..."
     cmd_setup
     image_ok || die "la instalacion de la imagen fallo (mira el error de arriba o reintenta 'sudo $PROG setup')"
@@ -356,6 +363,79 @@ inside_dir() {
 # --- setup: descarga + verifica + extrae la imagen (corre como root)
 # version estructurado (Commit 5, format 1). El plano legacy (url=/date=) se
 # acepta al leer y se migra al escribir. Sin jq: printf al emitir, grep al leer.
+# --- setup atomico (Commit 6): invariante = SIGKILL en cualquier punto deja
+# el sistema recuperable en la siguiente invocacion (ver recover_staging).
+# Orden: descarga -> fsync -> sha -> staging -> fsync -> version DENTRO del
+# staging -> fsync -> rotacion via .old.tmp.$$ -> rename (publica imagen+
+# version juntas) -> fsync -> rotar .old -> fsync. Red (-Sy) al final: si
+# muere ahi, el root ya es valido y el proximo setup reintenta.
+data_sync() { # <paths...> : fsync best-effort; nunca falla setup
+    sync "$@" 2>/dev/null || sync 2>/dev/null || true
+}
+recover_staging() { # huerfanos de setup/rollback matados: repara; rc 0 siempre
+    local D="$ARXY_DATA" R="$ARXY_ROOT" s t
+    local stages=() tmps=() swaps=()
+    local row
+    while IFS= read -r row; do stages+=("$row"); done < <(
+        for s in "$R".new.*; do [[ -e "$s" ]] || continue
+            printf '%s\t%s\n' "$(stat -c %Y "$s" 2>/dev/null || echo 0)" "$s"; done | sort -rn | cut -f2-)
+    while IFS= read -r row; do tmps+=("$row"); done < <(
+        for t in "$R".old.tmp.*; do [[ -e "$t" ]] || continue
+            printf '%s\t%s\n' "$(stat -c %Y "$t" 2>/dev/null || echo 0)" "$t"; done | sort -rn | cut -f2-)
+    for s in "$R".swap.*; do [[ -e "$s" ]] && swaps+=("$s"); done
+    for s in "$D"/.image.partial.*; do # descarga a medias: reintentar
+        [[ -e "$s" ]] || continue
+        rm -f "$s" 2>/dev/null && msg "recovered: descarga parcial borrada from $s" >&2 || true
+    done
+    local promoted=0
+    # .old.tmp primero: estuvo VIVO (staging nunca). El mas reciente gana el
+    # root; el resto rota a .old. Sin tmp valido, el staging puede promover.
+    for t in ${tmps[@]+"${tmps[@]}"}; do
+        if [[ ! -e "$R" ]] && _image_ok "$t"; then
+            mv "$t" "$R" 2>/dev/null && msg "recovered: root restaurado from $t" >&2 || true
+        elif image_ok; then
+            rm -rf "$R.old" 2>/dev/null || true
+            mv "$t" "$R.old" 2>/dev/null && msg "recovered: rotado a .old from $t" >&2 || true
+        elif [[ -e "$R" ]] && _image_ok "$t"; then
+            rm -rf "$R" 2>/dev/null || true
+            mv "$t" "$R" 2>/dev/null && msg "recovered: root invalido reemplazado from $t" >&2 || true
+        else
+            rm -rf "$t" 2>/dev/null && msg "recovered: tmp invalido descartado from $t" >&2 || true
+        fi
+    done
+    for s in ${stages[@]+"${stages[@]}"}; do
+        if image_ok; then
+            rm -rf "$s" 2>/dev/null && msg "recovered: staging borrado (root valido) from $s" >&2 || true
+        elif (( ! promoted )) && [[ ! -e "$R" ]] && _image_ok "$s"; then
+            mv "$s" "$R" 2>/dev/null && promoted=1 \
+                && msg "recovered: staging promovido a root from $s" >&2 || true
+        else
+            rm -rf "$s" 2>/dev/null && msg "recovered: staging invalido borrado from $s" >&2 || true
+        fi
+    done
+    for s in ${swaps[@]+"${swaps[@]}"}; do
+        if [[ ! -e "$R" ]]; then
+            mv "$s" "$R" 2>/dev/null && msg "recovered: swap restaurado from $s" >&2 || true
+        fi
+    done
+    return 0
+}
+ensure_version() { # root valido sin version util: regenera; rc 0 siempre
+    image_ok || return 0
+    local f="$ARXY_VERSION_FILE" legacy="$ARXY_VERSION_LEGACY"
+    if [[ -f "$f" ]] && { grep -q '"format": 1' "$f" 2>/dev/null || grep -q '^url=' "$f" 2>/dev/null; }; then
+        [[ "$legacy" != "$f" ]] && rm -f "$legacy" 2>/dev/null || true
+        return 0
+    fi
+    [[ -f "$f" ]] && msg "aviso: version ilegible, regenero" >&2
+    # Sin permiso (usuario normal en root real): callar, setup como root
+    # regenera. El mkdir distingue: si el puede crear, el write puede escribir.
+    mkdir -p "${f%/*}" 2>/dev/null || return 0
+    write_version "${ARXY_IMAGE_URL:-}" "${ARXY_IMAGE_SHA256:-}" >/dev/null 2>&1 \
+        || { msg "aviso: no pude regenerar version" >&2; return 0; }
+    [[ "$legacy" != "$f" ]] && rm -f "$legacy" 2>/dev/null || true
+    return 0
+}
 write_version() { # <image-url> <sha256> [created_at] : JSON atomico (0|1)
     local url="$1" sha="${2:-}" now="${3:-}" tmp
     [[ -z "$now" ]] && now="$(date -u +%FT%TZ 2>/dev/null || true)"
@@ -410,12 +490,13 @@ cmd_setup() {
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
     install -d -m1777 "$ARXY_BUILD/aur" # idem para workdirs (si lo crea root, el usuario no puede escribir)
     local tmp sha_tmp img_sha=""
-    tmp="$(mktemp "$ARXY_DATA/.arxy-dl.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    tmp="$(mktemp "$ARXY_DATA/.image.partial.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     # shellcheck disable=SC2064
     trap "rm -f '$tmp' '$sha_tmp'" EXIT
     msg "descargando imagen..."
     curl -fL --retry 3 -o "$tmp" "$ARXY_IMAGE_URL" || die "no se pudo descargar la imagen (¿red? reintenta, o usa ARXY_IMAGE_URL=file:///ruta/al/tarball)"
+    data_sync "$tmp" "$ARXY_DATA" # lo hasheado es lo que hay en disco
     if [[ -n "$ARXY_IMAGE_SHA256" ]]; then
         [[ "$(sha256sum <"$tmp" | awk '{print $1}')" == "$ARXY_IMAGE_SHA256" ]] || die "sha256 no coincide, abortando (¿descarga truncada? reintenta o revisa ARXY_IMAGE_SHA256)"
     else
@@ -480,14 +561,17 @@ cmd_setup() {
         fi
     fi
     _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
-    # Rotar: actual -> .old (rollback de una generacion), staging -> actual.
-    rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
-    if [[ -d "$ARXY_ROOT" ]]; then
-        mv "$ARXY_ROOT" "$ARXY_ROOT.old" || { rm -rf "$stage"; die "no pude apartar la instalacion actual"; }
-    fi
-    mv "$stage" "$ARXY_ROOT" || die "rotacion fallo (la anterior esta en $ARXY_ROOT.old)"
+    [[ -z "$img_sha" ]] && img_sha="$ARXY_IMAGE_SHA256"
+    # version DENTRO del staging: nace con la imagen y el rename la publica
+    # junta — nunca hay root nuevo con version vieja ni al reves. El subshell
+    # contiene el override (sin save/restore); die ahi sale del subshell.
+    mkdir -p "$stage/var/lib/arxy" || { rm -rf "$stage"; die "no pude registrar version en el staging"; }
+    ( export ARXY_VERSION_FILE="$stage/var/lib/arxy/version"
+      write_version "$ARXY_IMAGE_URL" "$img_sha" ) || { rm -rf "$stage"; die "no pude escribir version"; }
+    data_sync "$stage" "$ARXY_DATA"
     # rc para la shell de nivel 2: resuelve en el subsistema lo que el host
-    # no conoce (rutas horneadas; se regenera en cada setup).
+    # no conoce (rutas horneadas; se regenera en cada setup). Antes del
+    # rename: su contenido no depende de que root este publicado.
     {
         echo "# generado por '$PROG setup' — no editar"
         echo 'command_not_found_handle() {'
@@ -515,12 +599,23 @@ cmd_setup() {
         echo "    command pacman --root \"$ARXY_ROOT\" --config \"$ARXY_ROOT/etc/pacman.conf\" --dbpath \"$ARXY_ROOT/var/lib/pacman\" \"\$@\""
         echo '}'
     } > "$ARXY_DATA/level2-rc"
-    [[ -z "$img_sha" ]] && img_sha="$ARXY_IMAGE_SHA256"
-    write_version "$ARXY_IMAGE_URL" "$img_sha" || die "no pude escribir version"
-    # Copia dentro del rootfs: el rollback rota dirs pero no este fichero;
-    # sin la copia, `version` mentiria tras un rollback (regla 3).
-    mkdir -p "$ARXY_ROOT/var/lib/arxy" || die "no pude registrar version en el rootfs"
-    cp -f "$ARXY_VERSION_FILE" "$ARXY_ROOT/var/lib/arxy/version" || die "no pude registrar version en el rootfs"
+    data_sync "$ARXY_DATA"
+    # Rotacion via .old.tmp.$$ : el rename publica imagen+version juntas
+    # (atomico). Kill aqui deja .old.tmp.$$ y lo resuelve recover_staging.
+    local old_tmp="$ARXY_ROOT.old.tmp.$$"
+    rm -rf "$old_tmp" 2>/dev/null || true
+    if [[ -d "$ARXY_ROOT" ]]; then
+        mv "$ARXY_ROOT" "$old_tmp" || { rm -rf "$stage"; die "no pude apartar la instalacion actual"; }
+    fi
+    mv "$stage" "$ARXY_ROOT" || die "rotacion fallo (la anterior esta en $old_tmp; el proximo arranque la rescata)"
+    data_sync "$ARXY_ROOT" "$ARXY_DATA"
+    if [[ -d "$old_tmp" ]]; then
+        rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
+        mv "$old_tmp" "$ARXY_ROOT.old" || msg "aviso: no pude rotar $old_tmp a rollback (el proximo arranque lo rescata)"
+    fi
+    data_sync "$ARXY_DATA"
+    # Una sola verdad: el legacy fuera del root ya no se escribe ni se lee.
+    [[ "$ARXY_VERSION_LEGACY" != "$ARXY_VERSION_FILE" ]] && rm -f "$ARXY_VERSION_LEGACY" 2>/dev/null || true
     # Perfil HW persistido (caché del mismo schema; doctor calcula fresco).
     # Antes del -Sy: describe lo instalado aunque falle la red. Nunca falla setup.
     write_hardware_json "$(emit_hardware_json 2>/dev/null || true)"
@@ -541,14 +636,9 @@ cmd_rollback() {
     else
         mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "rollback fallo"
     fi
-    # El version file vive fuera del root y el swap no lo mueve: restaurar
-    # la copia que viajo dentro del rootfs (regla 3 tambien vale tras
-    # rollback). Sin fuente (rootfs viejo o borrado a mano), se conserva
-    # el actual sin avisar: uso manual fuera de contrato.
-    if [[ -f "$ARXY_ROOT/var/lib/arxy/version" ]]; then
-        cp -f "$ARXY_ROOT/var/lib/arxy/version" "$ARXY_VERSION_FILE" 2>/dev/null || \
-            msg "aviso: rollback hecho pero no pude restaurar el version file"
-    fi
+    # version viaja DENTRO del root (Commit 6): el swap la rota sola, sin
+    # copias. Si el root restaurado es pre-Commit 6 (sin version dentro),
+    # ensure_version la regenera en el proximo uso.
     msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
 }
 

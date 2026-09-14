@@ -53,7 +53,13 @@ ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"
 _restore_frozen
 
 ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
-ARXY_VERSION_FILE="$ARXY_DATA/version"
+# version DENTRO del root (Commit 6): nace en el staging y el rename la
+# publica junto a la imagen — nunca hay root nuevo con version vieja ni al
+# reves, y el rollback la rota sola. El env manda (tests la aislan).
+: "${ARXY_VERSION_FILE:=$ARXY_ROOT/var/lib/arxy/version}"
+# Ruta pre-Commit 6 (fuera del root): solo se lee para adoptar una vez y
+# borrar; el codigo nuevo jamas la escribe (una sola verdad).
+: "${ARXY_VERSION_LEGACY:=$ARXY_DATA/version}"
 ARXY_BUILD="$ARXY_DATA/build"              # dir de compilacion AUR (1777)
 NS_BUILD="/arxy-build"                     # misma dir vista desde dentro
 
@@ -135,7 +141,8 @@ nc_args() {
 }
 
 ensure_image() {
-    if image_ok; then migrate_version_file; return 0; fi
+    recover_staging || true # huerfanos de kills: reparar nunca bloquea el arranque
+    if image_ok; then ensure_version; migrate_version_file; return 0; fi
     msg "imagen no encontrada en $ARXY_ROOT, descargando..."
     cmd_setup
     image_ok || die "la instalacion de la imagen fallo (mira el error de arriba o reintenta 'sudo $PROG setup')"
