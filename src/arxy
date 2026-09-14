@@ -1235,6 +1235,59 @@ is_mesa_mini() { # mini = build externo sin firma conocida
     run_pacman -Qi mesa 2>/dev/null | grep -q '^Packager.*Unknown'
 }
 
+# --- detecciones Fase 2 (contrato doctor --json / hardware.json, format 1) ---
+# Schema mínimo (tipos): format=int, level=int, libc=glibc|musl|unknown,
+# kernel={arch,releasestr}, userns/overlayfs_rootless/mount_setattr/seccomp/
+# cgroupv2=bool, landlock={available,abi}, gpu={vendor,driver}|null,
+# nvidia={present,version|null}, kmods=[fuse,userfaultfd,ntsync],
+# dev=[rutas], rootfs={path,version}. Añadir campos OK; renombrar/quitar no.
+# Salidas de una línea, componibles sin jq. Mocks (patrón ARXY_SYS_DRM_PATH):
+#   ARXY_SYS_ROOT=""  prefijo de /proc y /sys (falso en tests)
+#   ARXY_DEV_PATH="/dev"  dir de dispositivos (falso en tests)
+#   ARXY_LIB_DIR="/lib"  dir de loaders (falso en tests)
+#   ARXY_LIB64_DIR="/lib64"  idem 64 bits (falso en tests)
+detect_libc() { # glibc|musl|unknown (el loader musl manda: es inequívoco)
+    local d="${ARXY_LIB_DIR:-/lib}" m
+    for m in "$d"/ld-musl-*.so.1; do
+        [[ -e "$m" ]] && { echo musl; return 0; }
+    done
+    local v=""
+    if command -v ldd >/dev/null 2>&1; then
+        v="$(ldd --version 2>&1 | head -n 1 || true)"
+        case "$v" in *musl*) echo musl; return 0 ;; *GLIBC*|*"GNU libc"*) echo glibc; return 0 ;; esac
+    fi
+    [[ -f "${ARXY_LIB64_DIR:-/lib64}/ld-linux-x86-64.so.2" || -f "$d/ld-linux.so.2" ]] && { echo glibc; return 0; }
+    echo unknown
+}
+
+detect_nvidia_ver() { # 550.54.14|"" (vacío = sin driver o sin módulo)
+    local base="${ARXY_SYS_ROOT:-}" f v
+    for f in "$base/proc/driver/nvidia/version" "$base/sys/module/nvidia/version"; do
+        [[ -f "$f" ]] || continue
+        v="$(grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' "$f" 2>/dev/null | head -n 1 || true)"
+        [[ -n "$v" ]] && { echo "$v"; return 0; }
+    done
+    return 1
+}
+
+detect_kmods() { # sublista presente de: fuse userfaultfd ntsync ("" = ninguno)
+    local base="${ARXY_SYS_ROOT:-}" dev="${ARXY_DEV_PATH:-/dev}" out=""
+    [[ -d "$base/sys/module/fuse" ]] && out+="fuse "
+    [[ -f "$base/proc/sys/vm/unprivileged_userfaultfd" ]] && out+="userfaultfd "
+    [[ -e "$dev/ntsync" ]] && out+="ntsync "
+    echo "${out% }"
+    return 0
+}
+
+detect_dev_nodes() { # una ruta por línea: dri/* nvidia* fuse ntsync ("" = nada)
+    local dev="${ARXY_DEV_PATH:-/dev}" n
+    for n in "$dev"/dri/* "$dev"/nvidia* "$dev"/fuse "$dev"/ntsync; do
+        [[ -e "$n" ]] || continue
+        echo "$n"
+    done
+    return 0
+}
+
 cmd_quickstart() { # el siguiente paso segun estado (para quien no lee READMEs)
     echo "$PROG $ARXY_VERSION: tu siguiente paso es"
     if ! image_ok; then

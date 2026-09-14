@@ -96,3 +96,10 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
   pacman reemplaza, no escribe in-place. Auto solo si ahorra ≥10MB
   (`ARXY_NO_AUTO_DEDUP=1` lo desactiva).
 - `s=search` publicado (`sh` existe): `s` no es `shell`.
+
+## Contratos Fase 2+ (bridge y --json)
+
+- Fase 5 no integra el bridge sin resolver antes sus 4 bloqueantes
+  (lista en el header de `bridge/arxy-bridged.c`).
+- `doctor --json` lleva `"format": 1` desde el día 1; añadir campos es
+  compatible, renombrar/quitar exige `format: 2`.
