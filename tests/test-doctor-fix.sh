@@ -33,6 +33,9 @@ mkdir -p "$D/musllib" "$D/musllib64" "$D/muslidev/dri"
 touch "$D/musllib/ld-musl-x86_64.so.1" "$D/muslidev/dri/card0"
 t "nvidia-align aplicable con mock" -- sh -c 'ARXY_SYS_ROOT="'"$D"'/nv" ARXY_DEV_PATH="'"$D"'/nvdev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": true, \"destructive\": false, \"requires_root\": true.*\"phase\": 4"' "$BIN"
 t "musl-stack aplicable con mock" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"musl-glibc-stack\", \"applicable\": true"' "$BIN"
+mkdir -p "$D/nvonlydev"
+touch "$D/nvonlydev/nvidia0"
+t "nvidia nodos-sin-version skip preciso" -- sh -c 'ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/nvonlydev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": false" && ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/nvonlydev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"reason\": \"nodos nvidia"' "$BIN"
 
 if [[ "$(id -u)" -eq 0 ]]; then
     echo "SKIP: fix --apply sin root exige no-root (este shell es root)"

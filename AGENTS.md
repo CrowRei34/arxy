@@ -109,3 +109,4 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - Mocks de detección (tests sin root ni imagen, patrón `ARXY_SYS_DRM_PATH`):
   `ARXY_SYS_ROOT` (prefijo /proc+/sys), `ARXY_DEV_PATH` (defecto /dev),
   `ARXY_LIB_DIR`/`ARXY_LIB64_DIR` (loaders), `ARXY_SYS_DRM_PATH` (drm).
+- Tests con sh -c + funciones de lib/: export -f funciones y export de vars, o llamadas directas (3 bugs esta sesion por no hacerlo).

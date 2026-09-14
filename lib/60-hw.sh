@@ -133,7 +133,14 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             ;;
         nvidia-align)
             nv="$(detect_nvidia_ver || true)"
-            if [[ -z "$nv" ]]; then echo "skip|sin NVIDIA en host||"; return 0; fi
+            if [[ -z "$nv" ]]; then
+                if [[ -n "$(detect_dev_nodes | grep nvidia || true)" ]]; then
+                    echo "skip|nodos nvidia sin versión legible||"
+                else
+                    echo "skip|sin NVIDIA en host||"
+                fi
+                return 0
+            fi
             if ! image_ok; then
                 echo "todo|host $nv, sin rootfs verificado|instalar nvidia-utils=<host> en rootfs (Fase 4)|"
                 return 0
