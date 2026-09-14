@@ -1,6 +1,6 @@
-# --- GPU real (Fase 4, Commit 9): heuristica NVIDIA en bash, deteccion pura.
-# Sin montar nada (eso es Commit 10 en bwrap_base). Salidas componibles: una
-# entrada por linea. Mocks en AGENTS.md (todos probativos: sin mock y sin
+# --- GPU real (Fase 4): heuristica NVIDIA en bash, deteccion pura.
+# El montaje vive en run_in (lib/10-level.sh: solo run/shell; pacman via
+# in_bwrap no toca GPU). Salidas componibles: una entrada por linea. Mocks en AGENTS.md (todos probativos: sin mock y sin
 # NVIDIA, vacio sin fallar). file(1) ya es dependencia declarada del paquete.
 # NOTA: el driver Xorg (xorg/modules) no se escanea (sin mock propio); su
 # MAPEO si esta en nvidia_guest_path (Commit 10 lo instala por ruta conocida).
@@ -73,13 +73,19 @@ nvidia_icd_library() { # <icd.json> : library_path ("" si falta)
 }
 
 nvidia_icd_rewrite() { # <host_icd> <guest_lib> : JSON con library_path reescrito
-    local icd="$1" glib="$2" lp
+    local icd="$1" glib="$2" lp content
     [[ -f "$icd" ]] || return 0
     lp="$(nvidia_icd_library "$icd")"
     if [[ -z "$lp" ]]; then cat "$icd" 2>/dev/null || true; return 0; fi
-    sed "/\"library_path\"/ s|$lp|$glib|" "$icd" 2>/dev/null || true
+    # Sustitucion literal bash (patron entrecomillado = sin globs; en el
+    # reemplazo & y \ son literales, al reves que en sed): aguantan
+    # espacios, comillas, & y backslashes en rutas.
+    content="$(cat "$icd" 2>/dev/null || true)"
+    printf '%s\n' "${content//"$lp"/"$glib"}"
     return 0
 }
+# ponytail: rewrite solo 64-bit (el loader de 32-bit necesitaria su propio
+# manifiesto); segundo manifiesto cuando alguien corra Vulkan 32-bit aqui.
 
 nvidia_guest_path() { # <host_path> <class> : path en rootfs ("" = inclasificable)
     local h="$1" cls="${2:-}" lib

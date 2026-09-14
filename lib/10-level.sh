@@ -53,10 +53,55 @@ in_bwrap() {
         "$@"
 }
 
-# run_in <bwrap-opts...> -- <cmd...> : como in_bwrap pero con exec
+# run_in <bwrap-opts...> -- <cmd...> : como in_bwrap pero con exec.
+# Suma los binds NVIDIA (libs --ro-bind, devices --dev-bind, ICDs via
+# --ro-bind-data desde FD: sin ficheros temporales, sin carreras entre
+# concurrentes — cada proceso tiene sus FDs). Sin NVIDIA detectada, los
+# args son identicos a bwrap_base (cero regresion: pacman usa in_bwrap,
+# que no se toca). L2 no pasa por aqui (exec ld-linux directo, sin
+# namespace: /dev del host ya visible).
 run_in() {
     local -a b
     mapfile -t b < <(bwrap_base)
+    local _nvm _nvi
+    _nvm="$(nvidia_mounts 2>/dev/null || true)"
+    _nvi="$(nvidia_icds 2>/dev/null || true)"
+    if [[ -n "$_nvm$_nvi" ]]; then
+        # --dir antes que los binds (bwrap procesa en orden; el / ya viene
+        # bindeado primero desde bwrap_base). Solo lib64/lib32: el driver
+        # Xorg (xorg/modules) no se monta (ponytail: DDX anidada, montar
+        # cuando alguien corra un X dentro).
+        b+=(--dir /usr/lib/arxy-nvidia/lib64 --dir /usr/lib/arxy-nvidia/lib32)
+        local _h _g
+        while IFS=$'\t' read -r _h _g; do
+            [[ -n "${_h:-}" && -n "${_g:-}" ]] || continue
+            case "$_g" in /dev/*) b+=(--dev-bind "$_h" "$_g") ;; *) b+=(--ro-bind "$_h" "$_g") ;; esac
+        done <<<"$_nvm"
+        local _k _ip _d _lp _gl _nfd
+        while IFS=$'\t' read -r _k _ip; do
+            [[ -n "${_k:-}" && -n "${_ip:-}" ]] || continue
+            case "$_k" in
+                vulkan) _d=/usr/share/vulkan/icd.d ;;
+                egl) _d=/usr/share/egl/egl_external_platform.d ;;
+                *) continue ;;
+            esac
+            # El FD debe abrirse en ESTE shell (en un $() moriria con el
+            # subshell) y sobrevive al exec (sin CLOEXEC): bwrap lo lee al
+            # armar el namespace. Requiere bwrap con --ro-bind-data.
+            # library_path del host (a veces SONAME pelado) -> ruta absoluta
+            # dentro; el loader la resuelve sin depender del ld path.
+            # Sin library_path se monta tal cual (nada que redirigir).
+            _lp="$(nvidia_icd_library "$_ip")"
+            if [[ -n "$_lp" ]]; then
+                _gl="$(nvidia_guest_path "$(basename "$_lp")" 64)"
+                [[ -n "$_gl" ]] || continue
+                exec {_nfd}< <(nvidia_icd_rewrite "$_ip" "$_gl") || continue
+            else
+                exec {_nfd}< "$_ip" || continue
+            fi
+            b+=(--ro-bind-data "$_nfd" "$_d/$(basename "$_ip")")
+        done <<<"$_nvi"
+    fi
     exec bwrap "${b[@]}" \
         --setenv PATH "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
         "$@"

@@ -56,6 +56,9 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   `/dev/fuse`, `/dev/ntsync`.
 - NVIDIA en bash con `file -b` (ya es dependencia declarada del paquete);
   NUNCA parsear ELF a mano; fallback por path solo si `file` falla.
+- Montaje solo en `run_in()` (run/shell; pacman via `in_bwrap` intacto).
+  ICDs por `--ro-bind-data` desde FD (sin tmpdirs ni traps; requiere
+  bwrap con `--ro-bind-data`). Sin NVIDIA, args identicos a antes.
 - Mocks GPU (patrón `ARXY_SYS_DRM_PATH`, probativos: sin mock → vacío):
   `ARXY_SYS_ROOT` (reutilizado para `/proc/driver/nvidia` y
   `/sys/module/nvidia`; NO hay `ARXY_NVIDIA_SYSFS_PATH` separado),

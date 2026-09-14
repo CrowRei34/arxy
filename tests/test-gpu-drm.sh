@@ -40,6 +40,8 @@ HERE="$(dirname "$0")"
 . "$HERE/../lib/00-head.sh" >/dev/null 2>&1
 # shellcheck source=../lib/35-gpu.sh
 . "$HERE/../lib/35-gpu.sh" >/dev/null 2>&1
+# shellcheck source=../lib/10-level.sh
+. "$HERE/../lib/10-level.sh" >/dev/null 2>&1
 # shellcheck source=../lib/60-hw.sh
 . "$HERE/../lib/60-hw.sh" >/dev/null 2>&1
 
@@ -103,6 +105,49 @@ grep -q "nvidia_icd.json.*/usr/share/vulkan/icd.d/nvidia_icd.json" <<<"$out" && 
 grep -q "nvidia0.*nvidia0" <<<"$out" && echo "PASS: mounts device identidad" || { echo "FAIL: mounts device"; FAIL=$((FAIL+1)); }
 nvidia_mounts >/dev/null 2>&1
 [[ $? -eq 0 ]] && echo "PASS: mounts sin mock no falla" || { echo "FAIL: mounts sin mock rc"; FAIL=$((FAIL+1)); }
+
+echo "== rewrite con espacios y & (sustitucion literal, no sed)"
+printf '{ "ICD": { "library_path": "/usr/lib/con espacios/lib&A_nvidia.so.0" } }\n' > "$V/vk/esp.json"
+out="$(nvidia_icd_rewrite "$V/vk/esp.json" /usr/lib/arxy-nvidia/lib64/libA_nvidia.so.0)"
+grep -q '"/usr/lib/arxy-nvidia/lib64/libA_nvidia.so.0"' <<<"$out" && echo "PASS: rewrite espacios+&" || { echo "FAIL: rewrite espacios+& (tengo '$out')"; FAIL=$((FAIL+1)); }
+grep -q 'con espacios' <<<"$out" && { echo "FAIL: rewrite quita viejo con espacios"; FAIL=$((FAIL+1)); } || echo "PASS: rewrite quita viejo con espacios"
+
+echo "== run_in integra NVIDIA (fake bwrap, sin root)"
+FB="$D/fakebin"; mkdir -p "$FB"
+cat > "$FB/bwrap" <<'EOF'
+#!/usr/bin/env bash
+# fake bwrap: registra argv y vuelca el contenido de cada --ro-bind-data FD
+rec="${BWRAP_RECORD:?}"
+: > "$rec"
+printf '%s\n' "$@" >> "$rec"
+args=("$@"); i=0
+while (( i < ${#args[@]} )); do
+    if [[ "${args[i]}" == --ro-bind-data ]]; then
+        printf 'FDCONTENT %s\n' "${args[i+2]}" >> "$rec"
+        cat "/dev/fd/${args[i+1]}" >> "$rec" 2>/dev/null || printf '(FD ilegible)\n' >> "$rec"
+        printf 'ENDFD\n' >> "$rec"
+    fi
+    i=$((i+1))
+done
+exit 0
+EOF
+chmod +x "$FB/bwrap"
+REC="$D/bwrap-argv"
+# bwrap_base no toca GPU aunque haya mocks (pacman via in_bwrap intacto)
+out="$(ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_LIB_ROOT32="$M/r32" ARXY_VULKAN_ICD_PATH="$V/vk" ARXY_EGL_PLATFORM_PATH="$V/egl" ARXY_DEV_PATH="$MD" bwrap_base 2>/dev/null | grep -c arxy-nvidia || true)"
+g "bwrap_base intacto con mocks" "0" "$out"
+# sin NVIDIA -> args sin rastro (mock vacio)
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_NVIDIA_LIB_ROOT="$E/r" ARXY_NVIDIA_LIB_ROOT64="$E/r64" ARXY_NVIDIA_LIB_ROOT32="$E/r32" ARXY_VULKAN_ICD_PATH="$E/r" ARXY_EGL_PLATFORM_PATH="$E/r" ARXY_DEV_PATH="$E/r" run_in -- /bin/true ) >/dev/null 2>&1
+g "run_in vacio sin NVIDIA" "0" "$(grep -c arxy-nvidia "$REC" || true)"
+# con NVIDIA -> dirs antes que binds, dev-bind, ro-bind-data con contenido
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_LIB_ROOT32="$M/r32" ARXY_VULKAN_ICD_PATH="$V/vk" ARXY_EGL_PLATFORM_PATH="$V/egl" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
+grep -q -- '--dev-bind' "$REC" && grep -q "nvidia0" "$REC" && echo "PASS: run_in dev-bind nvidia0" || { echo "FAIL: run_in dev-bind"; FAIL=$((FAIL+1)); }
+grep -q "libcuda" "$REC" && grep -q "arxy-nvidia/lib64" "$REC" && echo "PASS: run_in ro-bind lib" || { echo "FAIL: run_in ro-bind lib"; FAIL=$((FAIL+1)); }
+dline="$(grep -n -- '--dir' "$REC" | head -1 | cut -d: -f1)"; bline="$(grep -n "arxy-nvidia/lib64/libcuda" "$REC" | head -1 | cut -d: -f1)"
+[[ -n "$dline" && -n "$bline" && "$dline" -lt "$bline" ]] && echo "PASS: run_in dir antes que bind" || { echo "FAIL: run_in orden dir/bind"; FAIL=$((FAIL+1)); }
+grep -q "FDCONTENT /usr/share/vulkan/icd.d/nvidia_icd.json" "$REC" && echo "PASS: run_in icd ro-bind-data" || { echo "FAIL: run_in icd ro-bind-data"; FAIL=$((FAIL+1)); }
+grep -q '"/usr/lib/arxy-nvidia/lib64/libGLX_nvidia.so.0"' "$REC" && echo "PASS: run_in icd reescrito en FD" || { echo "FAIL: run_in icd contenido FD"; FAIL=$((FAIL+1)); }
+grep -q '"/usr/lib/libGLX_nvidia.so.0"' "$REC" && { echo "FAIL: run_in icd path viejo en FD"; FAIL=$((FAIL+1)); } || echo "PASS: run_in icd sin path viejo"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
