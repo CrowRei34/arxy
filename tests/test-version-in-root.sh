@@ -8,6 +8,8 @@ FAIL=0
 HERE="$(dirname "$0")"
 ARXY_ROOT="/tmp/vinroot/root"
 export ARXY_ROOT
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh" # ARXY_BIN default: repo (no el instalado viejo)
 # shellcheck source=../lib/00-head.sh
 . "$HERE/../lib/00-head.sh" >/dev/null 2>&1
 # shellcheck source=../lib/60-hw.sh
@@ -51,10 +53,10 @@ echo "== T1: pacman no reclama la version (root real)"
 REAL_R="/var/lib/arxy/root"
 if [[ ! -f "$REAL_R/var/lib/arxy/version" ]] || [[ ! -x "$REAL_R/usr/bin/pacman" ]]; then
     echo "SKIP: T1 (sin imagen instalada con CLI nuevo)"
-elif ! "$HERE/../src/arxy" run /usr/bin/true >/dev/null 2>&1; then
+elif ! "$ARXY_BIN" run /usr/bin/true >/dev/null 2>&1; then
     echo "SKIP: T1 (run no disponible aqui)"
 else
-    out="$("$HERE/../src/arxy" run pacman -Qo /var/lib/arxy/version 2>&1 || true)"
+    out="$("$ARXY_BIN" run pacman -Qo /var/lib/arxy/version 2>&1 || true)"
     grep -q "No package owns" <<<"$out" && ok "T1 version sin dueno" || no "T1 version sin dueno"
 fi
 

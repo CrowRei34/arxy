@@ -14,6 +14,7 @@ case "$cmd" in
     remove | rm | uninstall)    cmd_remove "$@" ;;
     update | up | upgrade)      cmd_update "$@" ;;
     clean | clean-cache)        cmd_clean "$@" ;;
+    gc)                         cmd_gc "$@" ;;
     dedup)                      cmd_dedup "$@" ;;
     info | show)                cmd_info "$@" ;;
     list | l | ls | installed)  cmd_list "$@" ;;

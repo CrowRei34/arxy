@@ -10,6 +10,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)
   clean [--apply]   informa uso (rootfs/cache/AUR) y limpia con --apply
+  gc [--json] [--apply]  informa bytes (rollback/cache/build/staging) en texto o JSON; --apply purga
   dedup                hardlinkea ficheros identicos de /usr (ahorra disco)
   info <pkg>           info de un paquete (instalado o de repos)
   list|l               paquetes instalados ([desktop] = tiene lanzador)
