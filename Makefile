@@ -5,6 +5,7 @@
 # shellcheck corre sobre src/arxy GENERADO (los fragmentos sueltos dan
 # falsos SC2034/SC2148: vars y shebang viven en otro fragmento).
 LIB = lib/00-head.sh lib/10-level.sh lib/20-lifecycle.sh lib/30-package.sh \
+      lib/35-gpu.sh \
       lib/40-query.sh lib/41-desktop.sh lib/50-run.sh lib/60-hw.sh \
       lib/70-help.sh lib/zz-dispatch.sh
 

@@ -37,6 +37,7 @@ clean
 out="$(cmd_gc --json)"
 grep -q '"format": 1' <<<"$out" && grep -q '"total_bytes": 0' <<<"$out" && ok "T0 json total 0" || no "T0 json total 0"
 grep -q '"applied": false' <<<"$out" && ok "T0 applied false" || no "T0 applied false"
+grep -q '"hint": "nada que limpiar"' <<<"$out" && ok "T0 hint nada" || no "T0 hint nada"
 cmd_gc --apply --yes >/dev/null 2>&1
 [[ $? -eq 0 ]] && ok "T0 apply rc 0" || no "T0 apply rc 0"
 
@@ -45,6 +46,7 @@ clean; mkroot "$R"; mkroot "$R.old"; echo x > "$R.old/usr/bin/bash"
 out="$(cmd_gc --json)"
 grep -q '"root_old": {"present": true, "valid": true' <<<"$out" && ok "T1 json present+valid" || no "T1 json present+valid"
 grep -q '"staging": {"entries": 0' <<<"$out" && ok "T1 json staging keys" || no "T1 json staging keys"
+grep -q '"hint": "arxy gc --apply libera [0-9]* bytes (incluye rollback recuperable)"' <<<"$out" && ok "T1 hint accionable" || no "T1 hint accionable"
 if ( cmd_gc --apply </dev/null >/dev/null 2>&1 ); then no "T1 sin tty no purga"; else ok "T1 sin tty no purga"; fi
 [[ -d "$R.old" ]] && ok "T1 sin tty no toca" || no "T1 sin tty no toca"
 cmd_gc --apply --yes >/dev/null 2>&1

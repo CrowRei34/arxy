@@ -44,6 +44,26 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - `version` vive dentro del root: el rename publica imagen+versión juntas;
   el rollback la rota sola (sin copias).
 
+## Fase 4: decisiones (GPU real + arxy-gaming)
+
+- Meta-paquete en AUR, no reinventar pacman: `arxy-gaming` (base: steam,
+  proton-ge-custom-bin, wine, dxvk-bin, vkd3d, gamescope, mangohud,
+  lib32-mesa, lib32-vulkan-*) + ramas `-nvidia` (nvidia-utils alineados
+  con host), `-amd` (mesa, vulkan-radeon…), `-intel` (mesa, vulkan-intel…).
+  `arxy install arxy-gaming` detecta vendor (`detect_gpu()`) y elige rama.
+- musl: `--no-host-gpu` en `bwrap_base()`; stack gráfico completo DENTRO
+  del rootfs (ya es Arch glibc); binds solo `/dev/dri*`, `/dev/nvidia*`,
+  `/dev/fuse`, `/dev/ntsync`.
+- NVIDIA en bash con `file -b` (ya es dependencia declarada del paquete);
+  NUNCA parsear ELF a mano; fallback por path solo si `file` falla.
+- Mocks GPU (patrón `ARXY_SYS_DRM_PATH`, probativos: sin mock → vacío):
+  `ARXY_SYS_ROOT` (reutilizado para `/proc/driver/nvidia` y
+  `/sys/module/nvidia`; NO hay `ARXY_NVIDIA_SYSFS_PATH` separado),
+  `ARXY_NVIDIA_LIB_ROOT` (`/usr/lib`), `ARXY_NVIDIA_LIB_ROOT64`
+  (`/usr/lib64`), `ARXY_NVIDIA_LIB_ROOT32` (`/usr/lib32`),
+  `ARXY_VULKAN_ICD_PATH` (`/usr/share/vulkan/icd.d`),
+  `ARXY_EGL_PLATFORM_PATH` (`/usr/share/egl/egl_external_platform.d`).
+
 ## La matrix (repo hermano `arxy-image`)
 
 Puerta de publicación: `tests/matrix.sh` (+ `tests/README.md`: qué

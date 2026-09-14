@@ -370,6 +370,8 @@ cmd_gc() { # [--json] [--apply [--yes]]
         [[ -d "$old" ]] && rm -rf "${old:?}" 2>/dev/null || true
         rm -f "$pkgdir"/* 2>/dev/null || true
         rm -rf "${ARXY_BUILD:?}" 2>/dev/null || true
+        # gc --apply garantiza ARXY_BUILD existente (1777, como setup): el
+        # siguiente build no depende de que setup haya corrido antes.
         install -d -m1777 "$ARXY_BUILD" 2>/dev/null || true
         local post s2=0 _acc
         post=$(( $(_gc_bytes "$old") + $(_gc_bytes "$pkgdir") + $(_gc_bytes "$ARXY_BUILD") ))
@@ -382,6 +384,12 @@ cmd_gc() { # [--json] [--apply [--yes]]
         (( applied_bytes >= 0 )) || applied_bytes=0
     fi
     if [[ -n "$use_json" ]]; then
+        local hint="nada que limpiar"
+        if (( total > 0 )) && [[ "$old_present" == true ]]; then
+            hint="arxy gc --apply libera $total bytes (incluye rollback recuperable)"
+        elif (( total > 0 )); then
+            hint="arxy gc --apply libera $total bytes"
+        fi
         printf '{"format": 1'
         printf ', "root_old": {"present": %s, "valid": %s, "size": %s}' \
             "$(json_bool "$([[ "$old_present" == true ]] && echo 1 || echo 0)")" \
@@ -390,6 +398,7 @@ cmd_gc() { # [--json] [--apply [--yes]]
         printf ', "build": {"path": %s, "size": %s}' "$(json_str "$ARXY_BUILD")" "$build_size"
         printf ', "staging": {"entries": %s, "size": %s}' "$st_n" "$st_size"
         printf ', "total_bytes": %s' "$total"
+        printf ', "hint": %s' "$(json_str "$hint")"
         printf ', "applied": %s, "applied_bytes": %s}\n' \
             "$(json_bool "$([[ "$applied" == true ]] && echo 1 || echo 0)")" "$applied_bytes"
         return 0

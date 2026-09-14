@@ -1,0 +1,115 @@
+# --- GPU real (Fase 4, Commit 9): heuristica NVIDIA en bash, deteccion pura.
+# Sin montar nada (eso es Commit 10 en bwrap_base). Salidas componibles: una
+# entrada por linea. Mocks en AGENTS.md (todos probativos: sin mock y sin
+# NVIDIA, vacio sin fallar). file(1) ya es dependencia declarada del paquete.
+# NOTA: el driver Xorg (xorg/modules) no se escanea (sin mock propio); su
+# MAPEO si esta en nvidia_guest_path (Commit 10 lo instala por ruta conocida).
+
+elf_class() { # <fichero> : 64|32|"" (vacio = no ELF o file ausente)
+    local f="$1" cls=""
+    if command -v file >/dev/null 2>&1; then
+        cls="$(file -bL "$f" 2>/dev/null | grep -oE 'ELF (32|64)-bit' | head -n 1 || true)"
+    fi
+    case "$cls" in
+        "ELF 64-bit") echo 64; return 0 ;;
+        "ELF 32-bit") echo 32; return 0 ;;
+    esac
+    # Fallback por path (sin file): solo 32 es seguro de adivinar; el resto
+    # desconocido se salta (nunca montar algo mal clasificado).
+    case "$f" in
+        */lib32/*|*/i386-linux-gnu/*) echo 32; return 0 ;;
+    esac
+    echo ""
+    return 0
+}
+
+nvidia_libs() { # "class<TAB>path" por lib NVIDIA del host ("" = ninguna)
+    # Patrones con 'nvidia'/'cuda' obligatorios: 'libGLESv*.so*' a secas
+    # cazaria mesa y la sombrearia al montar. Symlinks saltados (el real ya
+    # sale); dedup por inodo para hardlinks.
+    local r="${ARXY_NVIDIA_LIB_ROOT:-/usr/lib}"
+    local r64="${ARXY_NVIDIA_LIB_ROOT64:-/usr/lib64}"
+    local r32="${ARXY_NVIDIA_LIB_ROOT32:-/usr/lib32}"
+    local d pat f cls key
+    local -A _seen=()
+    for d in "$r" "$r64" "$r32"; do
+        [[ -d "$d" ]] || continue
+        for pat in 'libnvidia-*.so*' 'libcuda.so*' 'libGLX_nvidia.so*' \
+                   'libEGL_nvidia.so*' 'libGLESv*nvidia*.so*' \
+                   'libvdpau_nvidia.so*' 'libnvidia-gtk*.so*' 'nvidia-*'; do
+            for f in "$d"/$pat; do
+                [[ -e "$f" ]] || continue
+                [[ -L "$f" ]] && continue # symlink: el real ya sale (evita duplicar link+real)
+                key="$(stat -c '%d:%i' "$f" 2>/dev/null || echo "$f")"
+                [[ -n "${_seen[$key]:-}" ]] && continue
+                _seen[$key]=1
+                cls="$(elf_class "$f")"
+                printf '%s\t%s\n' "$cls" "$f"
+            done
+        done
+    done
+    return 0
+}
+
+nvidia_icds() { # "kind<TAB>host_path" (kind: vulkan|egl; "" = ninguno)
+    local vk="${ARXY_VULKAN_ICD_PATH:-/usr/share/vulkan/icd.d}"
+    local egl="${ARXY_EGL_PLATFORM_PATH:-/usr/share/egl/egl_external_platform.d}"
+    local f
+    for f in "$vk"/*nvidia*.json; do
+        [[ -f "$f" ]] || continue
+        printf 'vulkan\t%s\n' "$f"
+    done
+    for f in "$egl"/*nvidia*.json; do
+        [[ -f "$f" ]] || continue
+        printf 'egl\t%s\n' "$f"
+    done
+    return 0
+}
+
+nvidia_icd_library() { # <icd.json> : library_path ("" si falta)
+    grep -m1 -oE '"library_path"[[:space:]]*:[[:space:]]*"[^"]*"' "$1" 2>/dev/null \
+        | cut -d'"' -f4 || true
+    return 0
+}
+
+nvidia_icd_rewrite() { # <host_icd> <guest_lib> : JSON con library_path reescrito
+    local icd="$1" glib="$2" lp
+    [[ -f "$icd" ]] || return 0
+    lp="$(nvidia_icd_library "$icd")"
+    if [[ -z "$lp" ]]; then cat "$icd" 2>/dev/null || true; return 0; fi
+    sed "/\"library_path\"/ s|$lp|$glib|" "$icd" 2>/dev/null || true
+    return 0
+}
+
+nvidia_guest_path() { # <host_path> <class> : path en rootfs ("" = inclasificable)
+    local h="$1" cls="${2:-}" lib
+    [[ "$cls" == 64 || "$cls" == 32 ]] || return 0
+    lib="lib$cls"
+    case "$h" in
+        *xorg/modules/*) printf '/usr/lib/arxy-nvidia/%s/xorg/%s\n' "$lib" "${h#*xorg/}" ;;
+        *) printf '/usr/lib/arxy-nvidia/%s/%s\n' "$lib" "$(basename "$h")" ;;
+    esac
+    return 0
+}
+
+nvidia_mounts() { # "host<TAB>guest" (libs + ICDs + devices; "" = nada)
+    local cls p g kind ip n
+    while IFS=$'\t' read -r cls p; do
+        [[ -n "${p:-}" ]] || continue
+        g="$(nvidia_guest_path "$p" "$cls")"
+        [[ -n "$g" ]] || continue
+        printf '%s\t%s\n' "$p" "$g"
+    done < <(nvidia_libs)
+    while IFS=$'\t' read -r kind ip; do
+        [[ -n "${ip:-}" ]] || continue
+        case "$kind" in
+            vulkan) printf '%s\t%s\n' "$ip" "/usr/share/vulkan/icd.d/$(basename "$ip")" ;;
+            egl) printf '%s\t%s\n' "$ip" "/usr/share/egl/egl_external_platform.d/$(basename "$ip")" ;;
+        esac
+    done < <(nvidia_icds)
+    while IFS= read -r n; do
+        [[ -n "$n" ]] || continue
+        printf '%s\t%s\n' "$n" "$n"
+    done < <(detect_dev_nodes 2>/dev/null | grep nvidia || true)
+    return 0
+}
