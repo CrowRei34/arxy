@@ -92,7 +92,7 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 
 ## 13. Tech debt vivo (`ponytail:`)
 
-`grep -rn 'ponytail:' lib/ tests/` es la lista (ver `AGENTS.md`
+`grep -rn 'ponytail:' lib/ tests/ bridge/` es la lista (ver `AGENTS.md`
 "Tech debt grepeable"). Resumen a fecha de cierre de Fase 4:
 
 - ICD Vulkan 32-bit (§4): manifiesto + loader cuando haya caso real.
@@ -100,3 +100,9 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 - glvnd vendors (§6): `--ro-bind-data` como los ICDs.
 - `\n` en nombres bajo `/usr` (`pkg_desktops`): `find -print0` si
   aparece un caso real.
+- TOCTOU realpath→execv (`bridge/arxy-bridged.c`): `openat2` con
+  `RESOLVE_*` o `fexecve` si hay caso real.
+- EINTR en drenaje final (ídem): reintentar `read` en `[done]`.
+- Padding base64 interior laxo (ídem): exigir `=` solo al final.
+- Off-by-one 65/64 en parse (ídem, inocuo: `authorize()` limita a
+  `MAXARGS`).
