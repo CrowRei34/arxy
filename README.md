@@ -102,7 +102,7 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
 
 - **Matrix en 5 distros** (Alpine, Chimera, Void, Ubuntu,
   Ubuntu-privilegiado): `arxy-image/tests/matrix.sh` — assertions de
-  contenido, no solo rc (25–28 checks según nivel y flags: rama libc,
+   contenido, no solo rc (29–34 checks según nivel y flags: rama libc,
   autodetección L2 y chroot `MATRIX_WRITE2=1` son condicionales).
   Cubre L1 completo (install/run/export/remove) y L2 en lecturas +
   guards AUR; L2 en escritura se ejercita con `MATRIX_WRITE2=1`
