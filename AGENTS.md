@@ -6,7 +6,7 @@ de seguridad** (compat-glibc, no aislamiento). Escribe solo en
 `/var/lib/arxy` (rootfs, `root.old` de rollback, `version`, estado) y
 `~/.local/share/applications/arxy-*.desktop`; lee `/etc/arxy/arxy.conf`
 y `~/.config/arxy/config`. Precedencia: **env > user-conf > sys-conf**
-(env congelado en `_restore_frozen`, `src/arxy:29`).
+(env congelado en `_restore_frozen`, `lib/00-head.sh:29`).
 
 ## Puerta antes de commit
 
@@ -20,6 +20,8 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - `lib/*.sh` son canónicos (`src/arxy` es generado y commiteado porque el
   instalador lo lee del clon); `config/arxy.conf` canónico;
   `packaging/void/…/files/` son copias manuales para xbps.
+- Flujo: editar solo lib/ → `make src/arxy` → commitear ambos juntos
+  (lint falla si el generado va desfasado).
 - Matrix con assertions de **contenido** (`grep`), nunca solo rc
   ← Fase 4: bugs mudos con rc=0 (lecturas L2, AUR roto).
 - `pacman` siempre `--noconfirm` vía `nc_args`; nunca `LD_LIBRARY_PATH`

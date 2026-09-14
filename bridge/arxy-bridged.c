@@ -4,6 +4,15 @@
 // (uid peer == getuid()), socket 0600, allowlist por realpath + X_OK, límites.
 // C11/POSIX, solo libc, sin dependencias externas.
 // Uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]
+// DEUDA Fase 5 (auditoría pre-commit; el spike se commitea tal cual):
+// BLOQUEANTE antes de exponer a input no confiable:
+//  1. jskip recursivo sin tope (DoS por stack overflow con JSON anidado).
+//  2. PATH relativo en resolve_cmd (bypass de allowlist con '.' en PATH).
+//  3. Acepta basura tras '}' y claves desconocidas (strictness JSON).
+//  4. \u subrogados sin combinar (UTF-8 mal formado).
+// HARDENING (no bloqueante): TOCTOU realpath->execv, EINTR en drenaje
+// final, padding base64 interior laxo, off-by-one 65/64 en parse (inocuo:
+// authorize() limita a MAXARGS).
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
