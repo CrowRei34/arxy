@@ -73,9 +73,16 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   espejan la lista bash (sincronizar al publicar; sin base: nunca se
   publica `arxy-gaming` pelado).
 - bridge (Fase 5): `ARXY_NO_BRIDGE=1` desactiva auto-arranque+montaje;
-  `ARXY_BRIDGE_ALLOWLIST` (nombres, default interno sin proton);
+  `ARXY_BRIDGE_ALLOWLIST` (nombres, default interno sin proton: no es
+  binario PATH y necesita mecanismo de directorio, no lista plana);
   `ARXY_BRIDGE_TOKEN` lo inyecta `run_in` desde el fichero del daemon
-  (alcance: daemon, Commit 17 lo refina por instancia).
+  (token DEL daemon para clientes; token POR instancia diferido: mismo
+  UID no distingue padre de hijo por env — documentado, no construido).
+- `command -v` no resuelve builtins/funciones (`command -v echo` da
+  `echo`): para localizar ejecutables, barrer `PATH` a mano +
+  `readlink -f` (patron: `bridge_resolve_allowlist`).
+- `LD_LIBRARY_PATH` no se scrubbea en L1 a proposito (blast radius
+  mayor que `VK_*`; sin caso real que lo pida no se toca).
 
 ## Tech debt grepeable
 

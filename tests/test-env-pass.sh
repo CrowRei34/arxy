@@ -11,11 +11,12 @@ D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
 REC="$D/rec"
 
-export ARXY_ROOT="/tmp/fake-root-no-existe" ARXY_PROBE="si"
+export ARXY_ROOT="/tmp/fake-root-no-existe" ARXY_PROBE="si" ARXY_BRIDGE_TOKEN="tok-dummy"
 sudo() { printf '%s\n' "$@" > "$REC"; return 0; }
 as_root true anything
 grep -q "^ARXY_ROOT=/tmp/fake-root-no-existe$" "$REC" && echo "PASS: sudo propaga ROOT" || { echo "FAIL: sudo propaga ROOT"; FAIL=$((FAIL+1)); }
 grep -q "^ARXY_PROBE=si$" "$REC" && echo "PASS: sudo propaga todo ARXY_*" || { echo "FAIL: sudo propaga todo"; FAIL=$((FAIL+1)); }
+grep -q "^ARXY_BRIDGE_TOKEN=tok-dummy$" "$REC" && echo "PASS: token viaja en re-exec" || { echo "FAIL: token en re-exec"; FAIL=$((FAIL+1)); }
 grep -q "^true$" "$REC" && grep -q "^anything$" "$REC" && echo "PASS: sudo mantiene argv tras --" || { echo "FAIL: sudo argv"; FAIL=$((FAIL+1)); }
 
 mkdir -p "$D/empty"

@@ -65,5 +65,16 @@ for _p in $(pgrep -x arxy-bridged 2>/dev/null || true); do kill "$_p" 2>/dev/nul
 rm -f "$D/p.sock" "$D/p.pid"
 echo "PASS: T20 limpieza"
 
+echo "== P4: sin flock no hay auto-arranque pero tampoco crash =="
+# shellcheck source=../lib/00-head.sh
+. "$HERE/../lib/00-head.sh" >/dev/null 2>&1
+# shellcheck source=../lib/80-bridge.sh
+. "$HERE/../lib/80-bridge.sh" >/dev/null 2>&1
+export XDG_RUNTIME_DIR="$D" ARXY_BRIDGE_BIN="$D/arxy-bridged"
+flock() { return 1; }
+if ensure_bridge_daemon; then echo "PASS: sin flock rc 0"; else echo "FAIL: sin flock rc"; FAIL=$((FAIL+1)); fi
+[[ ! -S "$D/arxy-bridge.sock" ]] && echo "PASS: sin flock no arranca" || { echo "FAIL: sin flock arranco"; FAIL=$((FAIL+1)); }
+unset -f flock
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
