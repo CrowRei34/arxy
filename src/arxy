@@ -1878,7 +1878,11 @@ detect_gpu() {
 }
 
 is_mesa_mini() { # mini = build externo sin firma conocida
-    run_pacman -Qi mesa 2>/dev/null | grep -q '^Packager.*Unknown'
+    # Sin pipe directo: con pipefail, `prod | grep -q` miente (SIGPIPE
+    # 141 cierra el productor antes; regla 5). Capturar y grepear después.
+    local _qi
+    _qi="$(run_pacman -Qi mesa 2>/dev/null || true)"
+    grep -q '^Packager.*Unknown' <<<"$_qi"
 }
 
 # --- detecciones Fase 2 (contrato doctor --json / hardware.json, format 1) ---

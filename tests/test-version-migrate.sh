@@ -34,7 +34,10 @@ if migrate_version_file 2>/dev/null && [[ ! -e "$D/version" ]]; then ok "ausente
 printf 'ni-json-ni-plano' > "$D/version"
 a="$(sha256sum <"$D/version")"
 if migrate_version_file 2>/dev/null && [[ "$(sha256sum <"$D/version")" == "$a" ]]; then ok "basura no se toca"; else no "basura no se toca"; fi
-if migrate_version_file 2>&1 >/dev/null | grep -q "corrupto"; then ok "basura avisa"; else no "basura avisa"; fi
+# Sin pipe directo: con pipefail, `prod | grep -q` puede dar SIGPIPE 141
+# (regla 5). Capturar en variable y grepear después.
+_mig_out="$(migrate_version_file 2>&1 >/dev/null || true)"
+if grep -q "corrupto" <<<"$_mig_out"; then ok "basura avisa"; else no "basura avisa"; fi
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
