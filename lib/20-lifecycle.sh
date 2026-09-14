@@ -8,54 +8,89 @@
 # version juntas) -> fsync -> rotar .old -> fsync. Red (-Sy) al final: si
 # muere ahi, el root ya es valido y el proximo setup reintenta.
 data_sync() { # <paths...> : fsync best-effort; nunca falla setup
+    # sync con operandos (coreutils) vacia los filesystems que los contienen
+    # (syncfs); sin operandos o en busybox es global. Correcto en ambos
+    # casos, mas caro en el segundo. Orden de llamada: fichero -> dir.
     sync "$@" 2>/dev/null || sync 2>/dev/null || true
 }
-recover_staging() { # huerfanos de setup/rollback matados: repara; rc 0 siempre
-    local D="$ARXY_DATA" R="$ARXY_ROOT" s t
-    local stages=() tmps=() swaps=()
-    local row
-    while IFS= read -r row; do stages+=("$row"); done < <(
-        for s in "$R".new.*; do [[ -e "$s" ]] || continue
-            printf '%s\t%s\n' "$(stat -c %Y "$s" 2>/dev/null || echo 0)" "$s"; done | sort -rn | cut -f2-)
-    while IFS= read -r row; do tmps+=("$row"); done < <(
-        for t in "$R".old.tmp.*; do [[ -e "$t" ]] || continue
-            printf '%s\t%s\n' "$(stat -c %Y "$t" 2>/dev/null || echo 0)" "$t"; done | sort -rn | cut -f2-)
-    for s in "$R".swap.*; do [[ -e "$s" ]] && swaps+=("$s"); done
-    for s in "$D"/.image.partial.*; do # descarga a medias: reintentar
+_newest_first() { # <prefijo> : "$prefijo"* mas reciente primero (una linea)
+    local p
+    for p in "$1"*; do [[ -e "$p" ]] || continue
+        printf '%s\t%s\n' "$(stat -c %Y "$p" 2>/dev/null || echo 0)" "$p"
+    done | sort -rn | cut -f2-
+}
+staging_inventory() { # huerfanos de setup/rollback: "<accion>\t<path>"; pura
+    # Una sola logica para recover_staging (aplica) y fix_probe (lista): un
+    # fix en uno se refleja en el otro. Acciones: remove | recover-root
+    # (R ausente) | replace-root (R invalido) | rotate-old (R valido).
+    # Orden: .old.tmp estuvo VIVO (staging nunca); el mas reciente gana.
+    local D="$ARXY_DATA" R="$ARXY_ROOT" p
+    local r_exists=0 r_valid=0 filled_root=0 filled_old=0
+    [[ -e "$R" ]] && r_exists=1
+    image_ok 2>/dev/null && r_valid=1
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        if (( ! r_exists && ! filled_root )) && _image_ok "$p"; then
+            printf 'recover-root\t%s\n' "$p"; filled_root=1; r_exists=1; r_valid=1
+        elif (( r_valid && ! filled_old )) && _image_ok "$p"; then
+            printf 'rotate-old\t%s\n' "$p"; filled_old=1
+        elif (( r_exists && ! r_valid && ! filled_root )) && _image_ok "$p"; then
+            printf 'replace-root\t%s\n' "$p"; filled_root=1; r_valid=1
+        else
+            printf 'remove\t%s\n' "$p"
+        fi
+    done < <(_newest_first "$R.old.tmp.")
+    while IFS= read -r p; do
+        [[ -n "$p" ]] || continue
+        if (( r_valid || filled_root )); then
+            printf 'remove\t%s\n' "$p"
+        elif (( ! filled_root )) && _image_ok "$p"; then
+            if (( r_exists )); then
+                printf 'replace-root\t%s\n' "$p"
+            else
+                printf 'recover-root\t%s\n' "$p"
+            fi
+            filled_root=1; r_exists=1; r_valid=1
+        else
+            printf 'remove\t%s\n' "$p"
+        fi
+    done < <(_newest_first "$R.new.")
+    local s
+    for s in "$D"/.image.partial.*; do
         [[ -e "$s" ]] || continue
-        rm -f "$s" 2>/dev/null && msg "recovered: descarga parcial borrada from $s" >&2 || true
+        printf 'remove\t%s\n' "$s"
     done
-    local promoted=0
-    # .old.tmp primero: estuvo VIVO (staging nunca). El mas reciente gana el
-    # root; el resto rota a .old. Sin tmp valido, el staging puede promover.
-    for t in ${tmps[@]+"${tmps[@]}"}; do
-        if [[ ! -e "$R" ]] && _image_ok "$t"; then
-            mv "$t" "$R" 2>/dev/null && msg "recovered: root restaurado from $t" >&2 || true
-        elif image_ok; then
-            rm -rf "$R.old" 2>/dev/null || true
-            mv "$t" "$R.old" 2>/dev/null && msg "recovered: rotado a .old from $t" >&2 || true
-        elif [[ -e "$R" ]] && _image_ok "$t"; then
-            rm -rf "$R" 2>/dev/null || true
-            mv "$t" "$R" 2>/dev/null && msg "recovered: root invalido reemplazado from $t" >&2 || true
+    for s in "$R".swap.*; do
+        [[ -e "$s" ]] || continue
+        # Swap = root ex-vivo completo: nunca se borra si es lo mejor
+        # disponible; solo sobra con un root valido ya en su sitio.
+        if (( ! r_exists && ! filled_root )); then
+            printf 'recover-root\t%s\n' "$s"; filled_root=1
+        elif (( r_exists && ! r_valid && ! filled_root )); then
+            printf 'replace-root\t%s\n' "$s"; filled_root=1
         else
-            rm -rf "$t" 2>/dev/null && msg "recovered: tmp invalido descartado from $t" >&2 || true
+            printf 'remove\t%s\n' "$s"
         fi
     done
-    for s in ${stages[@]+"${stages[@]}"}; do
-        if image_ok; then
-            rm -rf "$s" 2>/dev/null && msg "recovered: staging borrado (root valido) from $s" >&2 || true
-        elif (( ! promoted )) && [[ ! -e "$R" ]] && _image_ok "$s"; then
-            mv "$s" "$R" 2>/dev/null && promoted=1 \
-                && msg "recovered: staging promovido a root from $s" >&2 || true
-        else
-            rm -rf "$s" 2>/dev/null && msg "recovered: staging invalido borrado from $s" >&2 || true
-        fi
-    done
-    for s in ${swaps[@]+"${swaps[@]}"}; do
-        if [[ ! -e "$R" ]]; then
-            mv "$s" "$R" 2>/dev/null && msg "recovered: swap restaurado from $s" >&2 || true
-        fi
-    done
+    return 0
+}
+recover_staging() { # aplica staging_inventory; log a stderr; rc 0 siempre
+    local acc path R="$ARXY_ROOT"
+    while IFS=$'\t' read -r acc path; do
+        [[ -n "${path:-}" ]] || continue
+        case "$acc" in
+            remove) rm -rf "$path" 2>/dev/null \
+                && msg "recovered: huerfano borrado from $path" >&2 || true ;;
+            recover-root) mv "$path" "$R" 2>/dev/null \
+                && msg "recovered: root restaurado from $path" >&2 || true ;;
+            replace-root) rm -rf "$R" 2>/dev/null || true
+                mv "$path" "$R" 2>/dev/null \
+                && msg "recovered: root invalido reemplazado from $path" >&2 || true ;;
+            rotate-old) rm -rf "$R.old" 2>/dev/null || true
+                mv "$path" "$R.old" 2>/dev/null \
+                && msg "recovered: rotado a .old from $path" >&2 || true ;;
+        esac
+    done < <(staging_inventory)
     return 0
 }
 ensure_version() { # root valido sin version util: regenera; rc 0 siempre

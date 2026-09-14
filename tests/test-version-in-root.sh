@@ -23,7 +23,7 @@ trap 'rm -rf "$D"' EXIT
 ok() { echo "PASS: $1"; }
 no() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
-mkroot() { # <$dir> [$version-url] : rootfs valido para _image_ok
+mkroot() { # <$dir> [$version-url] [$sha] : rootfs valido para _image_ok
     mkdir -p "$1/usr/bin" "$1/etc"
     : > "$1/usr/bin/bash"; : > "$1/usr/bin/pacman"
     chmod +x "$1/usr/bin/bash" "$1/usr/bin/pacman"
@@ -31,18 +31,20 @@ mkroot() { # <$dir> [$version-url] : rootfs valido para _image_ok
     if [[ -n "${2:-}" ]]; then
         mkdir -p "$1/var/lib/arxy"
         ( export ARXY_VERSION_FILE="$1/var/lib/arxy/version"
-          write_version "$2" "" "2020-01-01T00:00:00Z" ) >/dev/null 2>&1
+          write_version "$2" "${3:-}" "2020-01-01T00:00:00Z" ) >/dev/null 2>&1
     fi
 }
 
 echo "== T0: rollback rota la version sin copiar nada fuera"
-mkroot "$R" "file:///nuevo"; echo nuevo > "$R/.mark"
-mkroot "$R.old" "file:///viejo"; echo viejo > "$R.old/.mark"
+mkroot "$R" "file:///nuevo" "aaa-nuevo"; echo nuevo > "$R/.mark"
+mkroot "$R.old" "file:///viejo" "bbb-viejo"; echo viejo > "$R.old/.mark"
 cmd_rollback >/dev/null 2>&1
 [[ $? -eq 0 ]] && ok "T0 rollback rc 0" || no "T0 rollback rc 0"
 [[ "$(cat "$R/.mark" 2>/dev/null)" == viejo ]] && ok "T0 root es el viejo" || no "T0 root es el viejo"
 grep -q '"image": "file:///viejo"' "$R/var/lib/arxy/version" 2>/dev/null && ok "T0 version describe al activo" || no "T0 version describe al activo"
+grep -q '"sha256": "bbb-viejo"' "$R/var/lib/arxy/version" 2>/dev/null && ok "T0 sha es del activo" || no "T0 sha es del activo"
 grep -q '"image": "file:///nuevo"' "$R.old/var/lib/arxy/version" 2>/dev/null && ok "T0 .old guarda la nueva" || no "T0 .old guarda la nueva"
+grep -q '"sha256": "aaa-nuevo"' "$R.old/var/lib/arxy/version" 2>/dev/null && ok "T0 .old guarda su sha" || no "T0 .old guarda su sha"
 [[ ! -e "$D/version" ]] && ok "T0 nada fuera del root" || no "T0 nada fuera del root"
 
 echo "== T1: pacman no reclama la version (root real)"

@@ -27,7 +27,9 @@ is_mesa_mini() { # mini = build externo sin firma conocida
 # fuse:str|null}, rootfs={path,present,version:date|null}, fixes_available=[...],
 # fixes_applied=[]. Añadir campos OK; renombrar/quitar no (ver AGENTES.md).
 # fixes_available hoy: [hold-mesa]; futuros: nvidia-align, musl-glibc-stack,
-# gpu-full-stack (Fase 4).
+# gpu-full-stack (Fase 4). staging-cleanup (Commit 7) lista huerfanos de
+# setup/rollback via staging_inventory (la misma que aplica recover_staging).
+FIX_IDS=(hold-mesa nvidia-align musl-glibc-stack gpu-full-stack staging-cleanup)
 # "fixes" es array de objetos {id,applicable,destructive,requires_root,reason,would_do,phase,opt_in?}; phase null = aplicable hoy.
 # Salidas componibles sin jq: kmods en una línea (espacios), dev_nodes una
 # ruta por línea, el resto valor único o vacío. Mocks (patrón ARXY_SYS_DRM_PATH):
@@ -166,6 +168,29 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             if ! is_mesa_mini; then echo "ok|stack completo instalado||"; return 0; fi
             echo "todo|GPU $g con mesa-mini (sin LLVM)|instalar mesa completo + vulkan + lib32 (opt-in, Fase 4)|opt-in"
             ;;
+        staging-cleanup)
+            local inv="" n=0 wd="" w acc p
+            inv="$(staging_inventory 2>/dev/null || true)"
+            if [[ -z "$inv" ]]; then echo "skip|sin staging huerfano||"; return 0; fi
+            n="$(printf '%s\n' "$inv" | grep -c . || true)"
+            while IFS=$'\t' read -r acc p; do
+                [[ -n "${p:-}" ]] || continue
+                case "$acc" in
+                    remove) w="borrar ${p##*/}" ;;
+                    recover-root) w="recuperar ${p##*/} a root" ;;
+                    replace-root) w="reemplazar root con ${p##*/}" ;;
+                    rotate-old) w="rotar ${p##*/} a root.old" ;;
+                    *) continue ;;
+                esac
+                wd+="$w; "
+            done <<<"$inv"
+            wd="${wd%; }"
+            if (( n == 1 )); then
+                echo "todo|1 entrada de staging huerfana|$wd|"
+            else
+                echo "todo|$n entradas de staging huerfanas|$wd|"
+            fi
+            ;;
         *) return 1 ;;
     esac
     return 0
@@ -174,12 +199,12 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
 fixes_json() { # array "fixes" para --json (fixes_available sigue siendo [ids])
     local first=1 fid out st reason would opt app dest req phase wd
     printf '['
-    for fid in hold-mesa nvidia-align musl-glibc-stack gpu-full-stack; do
+    for fid in "${FIX_IDS[@]}"; do
         out="$(fix_probe "$fid")"
         IFS='|' read -r st reason would opt <<<"$out"
         if [[ "$st" == skip ]]; then app=false; else app=true; fi
         dest=false; req=true
-        if [[ "$fid" == hold-mesa ]]; then phase=null; else phase=4; fi
+        case "$fid" in hold-mesa|staging-cleanup) phase=null ;; *) phase=4 ;; esac
         if [[ -n "$would" ]]; then wd="$(json_str "$would")"; else wd=""; fi
         if [[ "$first" == 1 ]]; then first=0; else printf ', '; fi
         printf '{"id": "%s", "applicable": %s, "destructive": %s, "requires_root": %s' "$fid" "$app" "$dest" "$req"
@@ -206,8 +231,8 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
     local fid out st reason would opt
-    echo "fixes available: 4"
-    for fid in hold-mesa nvidia-align musl-glibc-stack gpu-full-stack; do
+    echo "fixes available: ${#FIX_IDS[@]}"
+    for fid in "${FIX_IDS[@]}"; do
         out="$(fix_probe "$fid")"
         IFS='|' read -r st reason would opt <<<"$out"
         case "$st" in
@@ -221,6 +246,9 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     else
                         echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
                     fi
+                elif [[ "$fid" == staging-cleanup && -n "$apply" ]]; then
+                    recover_staging >/dev/null
+                    echo "  [hecho] $fid aplicado (ver 'recovered:' arriba)"
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
                 fi
@@ -436,7 +464,7 @@ emit_hardware_json() {
         else nv_usable=1; nv_reason="stack completo"; fi
     fi
     local fixes="" fid fst
-    for fid in hold-mesa nvidia-align musl-glibc-stack gpu-full-stack; do
+    for fid in "${FIX_IDS[@]}"; do
         fst="$(fix_probe "$fid" | cut -d'|' -f1)"
         [[ "$fst" != skip ]] && fixes+="$fid "
     done

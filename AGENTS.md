@@ -37,6 +37,13 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - AUR solo en L1 y solo `-bin` (nunca toolchains); `--skippgpcheck` por
   defecto (`ARXY_GPG_CHECK=1` lo exige).
 
+## Invariantes del ciclo de vida
+
+- SIGKILL en cualquier punto deja el sistema recuperable en la siguiente
+  invocación (ver `recover_staging` en `lib/20-lifecycle.sh`).
+- `version` vive dentro del root: el rename publica imagen+versión juntas;
+  el rollback la rota sola (sin copias).
+
 ## La matrix (repo hermano `arxy-image`)
 
 Puerta de publicación: `tests/matrix.sh` (+ `tests/README.md`: qué

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # test-doctor-fix.sh — contrato --fix sin root (Commit 4): informa y propone,
 # nunca aplica. Sin imagen (ARXY_ROOT falso): determinista en cualquier host.
-# Uso: ./tests/test-doctor-fix.sh  (sin root)
-#   ARXY_BIN=./src/arxy ./tests/test-doctor-fix.sh  (probar el repo)
+# Uso: ./tests/test-doctor-fix.sh  (repo por defecto, sin root)
+#   ARXY_BIN=/ruta/a/arxy ./tests/test-doctor-fix.sh  (otro binario)
 set -uo pipefail
 FAIL=0
-BIN="${ARXY_BIN:-arxy}"
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh" # ARXY_BIN default: repo (no el instalado viejo)
+BIN="$ARXY_BIN"
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
 export ARXY_ROOT="$D/noroot"   # sin imagen: todos los fixes penden de mocks
@@ -18,11 +20,13 @@ t() { # t <nombre> -- <cmd...>
 }
 
 t "fix informa rc 0" -- sh -c '"$0" doctor --fix >/dev/null' "$BIN"
-t "fix lista 4" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes available: 4"' "$BIN"
+t "fix lista 5" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes available: 5"' "$BIN"
+t "fix lista staging-cleanup" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "staging-cleanup"' "$BIN"
 t "fix hint sin aplicar" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "repite con --apply"' "$BIN"
 t "fix --json rc == json" -- sh -c '"$0" doctor --fix --json >/dev/null 2>&1; a=$?; "$0" doctor --json >/dev/null 2>&1; test "$a" -eq "$?"' "$BIN"
 t "fix --json fixes_available" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"fixes_available\": \[\"hold-mesa\"\]"' "$BIN"
 t "fix --json objetos phase" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": [a-z]*, \"destructive\": false, \"requires_root\": true"' "$BIN"
+t "fix --json staging-cleanup phase null" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"staging-cleanup\", \"applicable\": false.*\"phase\": null"' "$BIN"
 t "fix --apply --json avisa" -- sh -c '"$0" doctor --fix --apply --json 2>/dev/null >/dev/null; "$0" doctor --fix --apply --json 2>&1 >/dev/null | grep -q "lista fixes sin aplicarlos"' "$BIN"
 
 # Mocks: nvidia presente (sin rootfs -> aplicable) y musl con dri (aplicable).

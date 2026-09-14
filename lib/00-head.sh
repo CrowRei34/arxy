@@ -73,7 +73,10 @@ else
 fi
 REAL_HOME="$(getent passwd "$REAL_USER" 2>/dev/null | cut -d: -f6)"
 [[ -z "${REAL_HOME:-}" || ! -d "$REAL_HOME" ]] && REAL_HOME="$HOME"
-REAL_APPS="$REAL_HOME/.local/share/applications"
+# XDG manda si esta fijado (tests/CI lo aislan en un tmpdir); si no, lo de
+# siempre. Sin esto, SUDO_USER filtrado parte los lanzadores del dir que la
+# matrix mira (dos tandas de FAILs en falso por el mismo gotcha).
+REAL_APPS="${XDG_DATA_HOME:-$REAL_HOME/.local/share}/applications"
 
 # Root via sudo/doas (ej. 'sudo arxy setup'): arriba se leyo el user-conf
 # de /root; el del usuario real tambien cuenta. El env congelado manda.

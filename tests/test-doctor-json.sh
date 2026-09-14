@@ -2,11 +2,13 @@
 # test-doctor-json.sh — contrato público doctor --json (format 1).
 # Asserts grep (valen sin jq/python) + parseo estricto con python3 si está.
 # Mocks via ARXY_SYS_ROOT/ARXY_DEV_PATH (la rama musl vive en test-detect.sh).
-# Uso: ./tests/test-doctor-json.sh  (no necesita imagen ni root)
-#   ARXY_BIN=./src/arxy ./tests/test-doctor-json.sh  (probar el repo)
+# Uso: ./tests/test-doctor-json.sh  (repo por defecto; no necesita imagen ni root)
+#   ARXY_BIN=/ruta/a/arxy ./tests/test-doctor-json.sh  (otro binario)
 set -uo pipefail
 FAIL=0
-BIN="${ARXY_BIN:-arxy}"
+# shellcheck source=lib.sh
+. "$(dirname "$0")/lib.sh" # ARXY_BIN default: repo (no el instalado viejo)
+BIN="$ARXY_BIN"
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
 
