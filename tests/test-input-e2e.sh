@@ -10,6 +10,10 @@ HERE="$(dirname "$0")"
 BIN="$ARXY_BIN"
 R="${ARXY_ROOT:-/tmp/input-root}"
 [[ "$R" == /var/lib/arxy/root ]] && { echo "SKIP: exige ARXY_ROOT aislado"; exit 0; }
+# El rootfs aislado por defecto es desechable: limpiar siempre al salir
+# (el guard de arriba garantiza que nunca es el real; con ARXY_ROOT
+# propio no se toca nada).
+[[ "$R" == /tmp/input-root ]] && trap 'rm -rf /tmp/input-root' EXIT INT TERM HUP
 export ARXY_ROOT="$R"
 
 t() { # t <nombre> <quiero> -- <cmd...>

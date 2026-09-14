@@ -151,6 +151,10 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
    `pkg_desktops` y similares debe funcionar en ambas formas
    ← 6.5.5: `-Qlq` con `--root` devuelve `/var/lib/arxy/root/usr/…`;
    `grep ^/usr/` ciego en L2. En L1 pelado. Matrix L1 jamás lo vio.
+9. Tests que dependan de la rama glibc/musl deben mockear
+   `detect_libc` (patrón `ARXY_SYS_DRM_PATH`) y cubrir AMBOS casos
+   ← Commit 11/bc7c844: 7 fallos pre-existentes solo visibles en musl;
+   la suite mentía en verde en glibc.
 
 **Cobertura pendiente post-v1.0.0:** la matrix no ejercita `export`
 bajo L2 ni instala paquetes con `.desktop` en L2. El caso se validó
