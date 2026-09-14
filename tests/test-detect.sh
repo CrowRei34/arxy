@@ -26,10 +26,18 @@ t() { # t <nombre> <esperado> -- <bash -c ...>
 
 # --- libc: el host dice la verdad; los mocks fuerzan cada rama
 t "libc host válida" "ok" -- bash -c 'case "$(detect_libc)" in glibc|musl|unknown) echo ok;; *) echo MAL;; esac'
-mkdir -p "$D/lib" && touch "$D/lib/ld-musl-x86_64.so.1"
-t "libc mock musl" "musl" -- bash -c 'ARXY_LIB_DIR="'"$D"'/lib" detect_libc'
+mkdir -p "$D/musllib" "$D/musllib64" && touch "$D/musllib/ld-musl-x86_64.so.1"
+t "libc mock musl" "musl" -- bash -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" detect_libc'
 mkdir -p "$D/empty"
 t "libc mock unknown" "unknown" -- bash -c 'PATH=/nonexistent ARXY_LIB_DIR="'"$D"'/empty" ARXY_LIB64_DIR="'"$D"'/empty" detect_libc'
+# Ambos loaders: arbitra ldd (el primario). En glibc+musl-pkg -> glibc;
+# sin ldd no hay primario visible -> unknown (sin prioridad falsa).
+mkdir -p "$D/duallib" "$D/duallib64"
+touch "$D/duallib/ld-musl-x86_64.so.1" "$D/duallib64/ld-linux-x86-64.so.2"
+_host_ldd="$(ldd --version 2>&1 | head -n 1 || true)"
+case "$_host_ldd" in *musl*) _want_dual=musl ;; *GLIBC*|*"GNU libc"*) _want_dual=glibc ;; *) _want_dual=unknown ;; esac
+t "libc dual arbitra ldd ($_want_dual)" "$_want_dual" -- bash -c 'ARXY_LIB_DIR="'"$D"'/duallib" ARXY_LIB64_DIR="'"$D"'/duallib64" detect_libc'
+t "libc dual sin ldd unknown" "unknown" -- bash -c 'PATH=/nonexistent ARXY_LIB_DIR="'"$D"'/duallib" ARXY_LIB64_DIR="'"$D"'/duallib64" detect_libc'
 
 # --- nvidia: /proc y /sys, formato real del driver
 mkdir -p "$D/nv1/proc/driver/nvidia" "$D/nv2/sys/module/nvidia"
@@ -38,6 +46,14 @@ printf '550.54.14\n' > "$D/nv2/sys/module/nvidia/version"
 t "nvidia desde proc" "550.54.14" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv1" detect_nvidia_ver'
 t "nvidia desde sys" "550.54.14" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv2" detect_nvidia_ver'
 t "nvidia ausente vacía" "" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/empty" detect_nvidia_ver || true'
+mkdir -p "$D/nv3/proc/driver/nvidia" "$D/nv3/sys/module/nvidia"
+: > "$D/nv3/proc/driver/nvidia/version"
+printf '560.35.03\n' > "$D/nv3/sys/module/nvidia/version"
+t "nvidia proc vacío cae a sys" "560.35.03" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv3" detect_nvidia_ver'
+mkdir -p "$D/nv4/proc/driver/nvidia" "$D/nv4/sys/module/nvidia"
+printf '550.54.14\n' > "$D/nv4/proc/driver/nvidia/version"
+printf '560.35.03\n' > "$D/nv4/sys/module/nvidia/version"
+t "nvidia proc manda sobre sys" "550.54.14" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv4" detect_nvidia_ver'
 r="$(ARXY_SYS_ROOT="$D/empty" detect_nvidia_ver 2>/dev/null; echo "rc=$?")"
 if [[ "$r" == "rc=1" ]]; then echo "PASS: nvidia ausente rc=1";
 else echo "FAIL: nvidia ausente rc=1 (tengo '$r')"; FAIL=$((FAIL+1)); fi

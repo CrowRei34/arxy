@@ -20,7 +20,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
-  doctor [--fix]      verifica requisitos e imagen (y repara con --fix)
+  doctor [--fix|--json]  verifica requisitos e imagen (y repara con --fix)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
   rollback             restaura la imagen anterior a un setup

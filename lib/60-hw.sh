@@ -18,27 +18,32 @@ is_mesa_mini() { # mini = build externo sin firma conocida
 }
 
 # --- detecciones Fase 2 (contrato doctor --json / hardware.json, format 1) ---
-# Schema mínimo (tipos): format=int, level=int, libc=glibc|musl|unknown,
-# kernel={arch,releasestr}, userns/overlayfs_rootless/mount_setattr/seccomp/
-# cgroupv2=bool, landlock={available,abi}, gpu={vendor,driver}|null,
-# nvidia={present,version|null}, kmods=[fuse,userfaultfd,ntsync],
-# dev=[rutas], rootfs={path,version}. Añadir campos OK; renombrar/quitar no.
-# Salidas de una línea, componibles sin jq. Mocks (patrón ARXY_SYS_DRM_PATH):
+# Schema mínimo (tipos): format=int, level=int, libc={kind:glibc|musl|unknown,
+# version:str|null}, kernel={arch,releasestr|null}, userns/overlayfs_rootless/
+# mount_setattr/seccomp/cgroupv2=bool, landlock={available,abi:int|null (null
+# hasta Fase 5: bash no consulta la ABI)}, gpu={vendor:amd|nvidia|intel|unknown,
+# driver:null (Fase 4), render_node:str|null}, nvidia={present,version|null,
+# usable,reason}, kmods=[...ordenado], dev={dri:[...],nvidia:[...],
+# fuse:str|null}, rootfs={path,present,version:date|null}, fixes_available=[...],
+# fixes_applied=[]. Añadir campos OK; renombrar/quitar no (ver AGENTES.md).
+# Salidas componibles sin jq: kmods en una línea (espacios), dev_nodes una
+# ruta por línea, el resto valor único o vacío. Mocks (patrón ARXY_SYS_DRM_PATH):
 #   ARXY_SYS_ROOT=""  prefijo de /proc y /sys (falso en tests)
 #   ARXY_DEV_PATH="/dev"  dir de dispositivos (falso en tests)
 #   ARXY_LIB_DIR="/lib"  dir de loaders (falso en tests)
 #   ARXY_LIB64_DIR="/lib64"  idem 64 bits (falso en tests)
-detect_libc() { # glibc|musl|unknown (el loader musl manda: es inequívoco)
-    local d="${ARXY_LIB_DIR:-/lib}" m
-    for m in "$d"/ld-musl-*.so.1; do
-        [[ -e "$m" ]] && { echo musl; return 0; }
-    done
+detect_libc() { # glibc|musl|unknown (ambos loaders -> decide ldd: el primario)
+    local d="${ARXY_LIB_DIR:-/lib}" d64="${ARXY_LIB64_DIR:-/lib64}"
+    local musl="" glibc="" m
+    for m in "$d"/ld-musl-*.so.1; do [[ -e "$m" ]] && musl=1 && break; done
+    [[ -f "$d64/ld-linux-x86-64.so.2" || -f "$d/ld-linux.so.2" ]] && glibc=1
+    [[ -n "$musl" && -z "$glibc" ]] && { echo musl; return 0; }
+    [[ -n "$glibc" && -z "$musl" ]] && { echo glibc; return 0; }
     local v=""
     if command -v ldd >/dev/null 2>&1; then
         v="$(ldd --version 2>&1 | head -n 1 || true)"
         case "$v" in *musl*) echo musl; return 0 ;; *GLIBC*|*"GNU libc"*) echo glibc; return 0 ;; esac
     fi
-    [[ -f "${ARXY_LIB64_DIR:-/lib64}/ld-linux-x86-64.so.2" || -f "$d/ld-linux.so.2" ]] && { echo glibc; return 0; }
     echo unknown
 }
 
@@ -156,6 +161,7 @@ doctor_fix() { # [--fix]
 
 # --- doctor / version / ayuda
 cmd_doctor() {
+    if [[ "${1:-}" == "--json" ]]; then shift; cmd_doctor_json "$@"; return $?; fi
     local ok=0
     say() { if [[ "$1" -eq 0 ]]; then echo "[OK]   $2"; else echo "[FALTA] $2"; ok=1; fi; }
     command -v bwrap >/dev/null 2>&1; say $? "bwrap en el host"
@@ -203,5 +209,136 @@ cmd_version() {
     else
         echo "hold mesa-mini: ausente"
     fi
+}
+
+# --- doctor --json (superficie pública versionada, format 1) ---
+# Sin jq a propósito (cero dependencias nuevas): printf + escaping mínimo.
+# Reglas: orden de campos fijo, arrays ordenados, avisos a stderr,
+# stdout = un solo documento JSON, exit igual que doctor en texto.
+json_str() { # <texto> -> "texto" con \ " y controles escapados
+    local s="${1//\\/\\\\}"
+    s="${s//\"/\\\"}"
+    s="${s//$'\n'/\\n}"; s="${s//$'\r'/\\r}"; s="${s//$'\t'/\\t}"
+    printf '"%s"' "$s"
+}
+json_bool() { # 1|0 -> true|false
+    if [[ "${1:-0}" == 1 ]]; then printf 'true'; else printf 'false'; fi
+}
+json_str_or_null() { # "" -> null (campos opcionales nunca se omiten)
+    if [[ -z "${1:-}" ]]; then printf 'null'; else json_str "$1"; fi
+}
+json_arr() { # líneas por stdin -> ["a", "b"] (vacío -> [])
+    local first=1 l
+    printf '['
+    while IFS= read -r l || [[ -n "$l" ]]; do
+        [[ -z "$l" ]] && continue
+        if [[ "$first" == 1 ]]; then first=0; else printf ', '; fi
+        json_str "$l"
+    done
+    printf ']'
+    return 0
+}
+
+kver_at_least() { # <mayor> <menor> : kernel >= X.Y (heurísticas documentadas)
+    local k
+    k="$(uname -r 2>/dev/null || true)"
+    [[ "$k" =~ ^([0-9]+)\.([0-9]+) ]] || return 1
+    (( BASH_REMATCH[1] > $1 || (BASH_REMATCH[1] == $1 && BASH_REMATCH[2] >= $2) ))
+}
+probe_userns() { # 1 si hay namespaces sin root (misma prueba que doctor)
+    if command -v unshare >/dev/null 2>&1 && unshare --user --map-root-user true 2>/dev/null; then echo 1; return 0; fi
+    if command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / /bin/true 2>/dev/null; then echo 1; return 0; fi
+    echo 0
+}
+probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin restos)
+    command -v unshare >/dev/null 2>&1 || { echo 0; return 0; }
+    local t
+    t="$(mktemp -d 2>/dev/null || true)"
+    [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { rm -rf "$t"; echo 0; return 0; }
+    local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
+    if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
+        echo 1
+    else
+        echo 0
+    fi
+    rm -rf "$t"
+    return 0
+}
+probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12
+probe_seccomp() { kver_at_least 3 17 && echo 1 || echo 0; } # seccomp-bpf desde 3.17
+probe_landlock() { kver_at_least 5 13 && echo 1 || echo 0; } # landlock desde 5.13
+probe_cgroupv2() {
+    command -v stat >/dev/null 2>&1 || { echo 0; return 0; }
+    [[ "$(stat -fc %T /sys/fs/cgroup 2>/dev/null || true)" == cgroup2fs ]] && echo 1 || echo 0
+}
+detect_libc_ver() { # 2.44|1.2.5|"" (best-effort desde la salida de ldd)
+    command -v ldd >/dev/null 2>&1 || return 1
+    local v
+    v="$(ldd --version 2>&1 | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
+    [[ -n "$v" ]] && echo "$v" || return 1
+}
+
+cmd_doctor_json() { # [--fix] : --fix se ignora (solo se lista); JSON a stdout
+    if [[ "${1:-}" == "--fix" ]]; then
+        msg "nota: --json lista fixes sin aplicarlos (usa 'doctor --fix' para aplicar)" >&2
+    elif [[ -n "${1:-}" ]]; then
+        die "uso: $PROG doctor [--fix|--json]"
+    fi
+    local ok=0 c
+    for c in bwrap curl tar zstd sha256sum awk sed grep mktemp su; do
+        command -v "$c" >/dev/null 2>&1 || ok=1
+    done
+    level
+    [[ "$_ARXY_LEVEL" == 1 || "$_ARXY_LEVEL" == 2 ]] || ok=1
+    image_ok || ok=1
+    [[ -n "$ARXY_IMAGE_URL" ]] || ok=1
+    local lckind lcver karch krel
+    lckind="$(detect_libc)"
+    lcver="$(detect_libc_ver || true)"
+    karch="$(uname -m 2>/dev/null || true)"
+    krel="$(uname -r 2>/dev/null || true)"
+    local gv rn
+    gv="$(detect_gpu || true)"
+    if [[ -z "$gv" ]]; then
+        if [[ -n "$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$' || true)" ]]; then gv=intel; else gv=unknown; fi
+    fi
+    rn="$(detect_dev_nodes | grep '/renderD' | sort | head -n 1 || true)"
+    local nv nv_present=0 nv_usable=0 nv_reason="sin driver en host"
+    nv="$(detect_nvidia_ver || true)"
+    [[ -n "$nv" ]] && nv_present=1
+    if [[ "$nv_present" == 0 ]] && [[ -n "$(detect_dev_nodes | grep nvidia || true)" ]]; then nv_present=1; fi
+    if [[ "$nv_present" == 1 ]]; then
+        if ! image_ok; then nv_reason="sin rootfs verificado";
+        elif is_mesa_mini; then nv_reason="mesa-mini sin LLVM en rootfs (instala gpu-nvidia)";
+        else nv_usable=1; nv_reason="stack completo"; fi
+    fi
+    local fixes=""
+    if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+        fixes="hold-mesa"
+    fi
+    local rver=""
+    [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(grep -m1 '^date=' "$ARXY_VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    printf '{"format": 1'
+    printf ', "level": %s' "$_ARXY_LEVEL"
+    printf ', "libc": {"kind": "%s", "version": %s}' "$lckind" "$(json_str_or_null "$lcver")"
+    printf ', "kernel": {"arch": %s, "release": %s}' "$(json_str_or_null "$karch")" "$(json_str_or_null "$krel")"
+    printf ', "userns": %s' "$(json_bool "$(probe_userns)")"
+    printf ', "overlayfs_rootless": %s' "$(json_bool "$(probe_overlayfs)")"
+    printf ', "mount_setattr": %s' "$(json_bool "$(probe_mount_setattr)")"
+    printf ', "seccomp": %s' "$(json_bool "$(probe_seccomp)")"
+    printf ', "landlock": {"available": %s, "abi": null}' "$(json_bool "$(probe_landlock)")"
+    printf ', "gpu": {"vendor": "%s", "driver": null, "render_node": %s}' "$gv" "$(json_str_or_null "$rn")"
+    printf ', "nvidia": {"present": %s, "version": %s, "usable": %s, "reason": %s}' \
+        "$(json_bool "$nv_present")" "$(json_str_or_null "$nv")" "$(json_bool "$nv_usable")" "$(json_str "$nv_reason")"
+    printf ', "kmods": %s' "$( { tr ' ' '\n' <<<"$(detect_kmods)" | grep . | sort || true; } | json_arr)"
+    printf ', "dev": {"dri": %s' "$( { detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$' | sort || true; } | json_arr)"
+    printf ', "nvidia": %s' "$( { detect_dev_nodes | grep nvidia | sort || true; } | json_arr)"
+    printf ', "fuse": %s}' "$(json_str_or_null "$(detect_dev_nodes | grep '/fuse$' | sort | head -n 1 || true)")"
+    printf ', "rootfs": {"path": "%s", "present": %s, "version": %s}' \
+        "$ARXY_ROOT" "$(json_bool "$(image_ok && echo 1 || echo 0)")" "$(json_str_or_null "$rver")"
+    printf ', "fixes_available": %s' "$( { tr ' ' '\n' <<<"$fixes" | grep . | sort || true; } | json_arr)"
+    printf ', "fixes_applied": []}\n'
+    return $ok
 }
 

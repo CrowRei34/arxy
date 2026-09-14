@@ -95,6 +95,11 @@ re-ejecuta con `sudo`.
 | `arxy dedup` | hardlinkea idénticos de `/usr` (auto tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
 | `axy` | alias corto de `arxy` |
 
+```bash
+arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
+# {"nivel": 1, "libc": "glibc", "gpu": "intel"}  (format: 1, estable)
+```
+
 Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
 (usuario); todo admite override por variable de entorno (`ARXY_*`).
 

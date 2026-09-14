@@ -20,8 +20,8 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - `lib/*.sh` son canónicos (`src/arxy` es generado y commiteado porque el
   instalador lo lee del clon); `config/arxy.conf` canónico;
   `packaging/void/…/files/` son copias manuales para xbps.
-- Flujo: editar solo lib/ → `make src/arxy` → commitear ambos juntos
-  (lint falla si el generado va desfasado).
+- Flujo: editar solo lib/ → `make sync` (regenera + copia a packaging) →
+  commitear todo junto (lint falla si algo va desfasado).
 - Matrix con assertions de **contenido** (`grep`), nunca solo rc
   ← Fase 4: bugs mudos con rc=0 (lecturas L2, AUR roto).
 - `pacman` siempre `--noconfirm` vía `nc_args`; nunca `LD_LIBRARY_PATH`
@@ -102,4 +102,8 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - Fase 5 no integra el bridge sin resolver antes sus 4 bloqueantes
   (lista en el header de `bridge/arxy-bridged.c`).
 - `doctor --json` lleva `"format": 1` desde el día 1; añadir campos es
-  compatible, renombrar/quitar exige `format: 2`.
+  compatible, renombrar/quitar exige `format: 2`. Schema exacto: comentario
+  en `lib/60-hw.sh` (única fuente, sin `.md` que derive).
+- Mocks de detección (tests sin root ni imagen, patrón `ARXY_SYS_DRM_PATH`):
+  `ARXY_SYS_ROOT` (prefijo /proc+/sys), `ARXY_DEV_PATH` (defecto /dev),
+  `ARXY_LIB_DIR`/`ARXY_LIB64_DIR` (loaders), `ARXY_SYS_DRM_PATH` (drm).

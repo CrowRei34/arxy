@@ -14,6 +14,12 @@ src/arxy: $(LIB) Makefile
 	bash -n $@.tmp
 	mv $@.tmp $@
 
-.PHONY: check
+.PHONY: check sync
 check: src/arxy
 	bash -n src/arxy install.sh
+
+# Copia el generado + conf a packaging/void (flujo: editar lib/,
+# make sync, commitear todo junto). cp es idempotente por diseño.
+sync: src/arxy
+	cp src/arxy packaging/void/arxy/files/arxy
+	cp config/arxy.conf packaging/void/arxy/files/arxy.conf
