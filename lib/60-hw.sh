@@ -288,7 +288,7 @@ cmd_doctor() {
         say 1 "user namespaces (necesarios para correr sin root)"
     fi
     image_ok; say $? "imagen en $ARXY_ROOT"
-    [[ -f "$ARXY_VERSION_FILE" ]] && msg "imagen: $(tr '\n' ' ' <"$ARXY_VERSION_FILE")"
+    [[ -f "$ARXY_VERSION_FILE" ]] && msg "imagen: $(version_line)"
     [[ -n "$ARXY_IMAGE_URL" ]]; say $? "ARXY_IMAGE_URL configurada"
     # Deteccion sin dependencias exoticas: solo bwrap funcional (nunca unshare).
     level
@@ -307,7 +307,7 @@ cmd_doctor() {
 cmd_version() {
     echo "$PROG $ARXY_VERSION"
     if [[ -f "$ARXY_VERSION_FILE" ]]; then
-        tr '\n' ' ' <"$ARXY_VERSION_FILE"; echo
+        version_line
     fi
     [[ "${1:-}" == "--verbose" ]] || return 0
     [[ -z "${2:-}" ]] || die "uso: $PROG version [--verbose]"
@@ -441,7 +441,7 @@ emit_hardware_json() {
         [[ "$fst" != skip ]] && fixes+="$fid "
     done
     local rver=""
-    [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(grep -m1 '^date=' "$ARXY_VERSION_FILE" 2>/dev/null | cut -d= -f2- || true)"
+    [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(version_field date || true)"
     printf '{"format": 1'
     printf ', "level": %s' "$_ARXY_LEVEL"
     printf ', "libc": {"kind": "%s", "version": %s}' "$lckind" "$(json_str_or_null "$lcver")"

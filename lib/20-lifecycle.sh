@@ -1,4 +1,52 @@
 # --- setup: descarga + verifica + extrae la imagen (corre como root)
+# version estructurado (Commit 5, format 1). El plano legacy (url=/date=) se
+# acepta al leer y se migra al escribir. Sin jq: printf al emitir, grep al leer.
+write_version() { # <image-url> <sha256> [created_at] : JSON atomico (0|1)
+    local url="$1" sha="${2:-}" now="${3:-}" tmp
+    [[ -z "$now" ]] && now="$(date -u +%FT%TZ 2>/dev/null || true)"
+    tmp="$(mktemp "${ARXY_VERSION_FILE%/*}/.version.XXXXXX" 2>/dev/null || true)"
+    [[ -n "$tmp" ]] || return 1
+    {
+        printf '{"format": 1'
+        printf ', "image": %s' "$(json_str "$url")"
+        printf ', "sha256": %s' "$(json_str_or_null "$sha")"
+        printf ', "created_at": %s' "$(json_str_or_null "$now")"
+        printf ', "arxy_version": %s}\n' "$(json_str "$ARXY_VERSION")"
+    } >"$tmp" 2>/dev/null || { rm -f "$tmp"; return 1; }
+    chmod 0644 "$tmp" 2>/dev/null || true
+    mv -f "$tmp" "$ARXY_VERSION_FILE" 2>/dev/null || { rm -f "$tmp"; return 1; }
+    return 0
+}
+version_field() { # <url|date> : valor (JSON o plano); rc 1 si falta
+    local k="$1" f="$ARXY_VERSION_FILE" jk line
+    [[ -f "$f" ]] || return 1
+    case "$k" in url) jk=image ;; date) jk=created_at ;; *) return 1 ;; esac
+    line="$(grep -m1 -oE "\"$jk\": \"[^\"]*\"" "$f" 2>/dev/null || true)"
+    if [[ -n "$line" ]]; then cut -d'"' -f4 <<<"$line"; return 0; fi
+    grep -m1 "^$k=" "$f" 2>/dev/null | cut -d= -f2- || return 1
+}
+version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
+    local u d
+    u="$(version_field url || true)"; d="$(version_field date || true)"
+    echo "url=$u date=$d"
+}
+migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)
+    local f="$ARXY_VERSION_FILE"
+    [[ -f "$f" ]] || return 0
+    grep -q '"format": 1' "$f" 2>/dev/null && return 0
+    local url="" date=""
+    url="$(grep -m1 '^url=' "$f" 2>/dev/null | cut -d= -f2- || true)"
+    date="$(grep -m1 '^date=' "$f" 2>/dev/null | cut -d= -f2- || true)"
+    if [[ -z "$url$date" ]]; then
+        msg "aviso: version corrupto (ni JSON ni plano), no migro" >&2
+        return 0
+    fi
+    if [[ ! -w "$f" && ! -w "${f%/*}" ]]; then
+        return 0 # sin permiso (usuario normal): setup como root migrará; callar
+    fi
+    write_version "$url" "" "$date" 2>/dev/null || msg "aviso: no pude migrar version a JSON" >&2
+    return 0
+}
 cmd_setup() {
     need_root
     need_cmd curl tar sha256sum zstd
@@ -6,7 +54,7 @@ cmd_setup() {
     mkdir -p "$ARXY_DATA"
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
     install -d -m1777 "$ARXY_BUILD/aur" # idem para workdirs (si lo crea root, el usuario no puede escribir)
-    local tmp sha_tmp
+    local tmp sha_tmp img_sha=""
     tmp="$(mktemp "$ARXY_DATA/.arxy-dl.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     # shellcheck disable=SC2064
@@ -28,6 +76,7 @@ cmd_setup() {
             [[ -n "$sha_rel" && "$(sha256sum <"$tmp" | awk '{print $1}')" == "$sha_rel" ]] \
                 || die "sha256 del release no coincide, abortando (¿descarga truncada? reintenta)"
             msg "verificado contra .sha256 del release"
+            img_sha="$sha_rel"
         else
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
         fi
@@ -111,10 +160,8 @@ cmd_setup() {
         echo "    command pacman --root \"$ARXY_ROOT\" --config \"$ARXY_ROOT/etc/pacman.conf\" --dbpath \"$ARXY_ROOT/var/lib/pacman\" \"\$@\""
         echo '}'
     } > "$ARXY_DATA/level2-rc"
-    {
-        echo "url=$ARXY_IMAGE_URL"
-        echo "date=$(date -u +%FT%TZ)"
-    } > "$ARXY_VERSION_FILE"
+    [[ -z "$img_sha" ]] && img_sha="$ARXY_IMAGE_SHA256"
+    write_version "$ARXY_IMAGE_URL" "$img_sha" || die "no pude escribir version"
     # Copia dentro del rootfs: el rollback rota dirs pero no este fichero;
     # sin la copia, `version` mentiria tras un rollback (regla 3).
     mkdir -p "$ARXY_ROOT/var/lib/arxy" || die "no pude registrar version en el rootfs"

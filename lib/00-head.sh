@@ -135,7 +135,7 @@ nc_args() {
 }
 
 ensure_image() {
-    image_ok && return 0
+    if image_ok; then migrate_version_file; return 0; fi
     msg "imagen no encontrada en $ARXY_ROOT, descargando..."
     cmd_setup
     image_ok || die "la instalacion de la imagen fallo (mira el error de arriba o reintenta 'sudo $PROG setup')"
