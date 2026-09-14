@@ -276,9 +276,14 @@ run_in() {
         done <<<"$_nvi"
     fi
     # Bridge (Fase 5): auto-arranque best-effort (nunca rompe run) y
-    # montaje a /run/arxy-bridge.sock con ARXY_BRIDGE_SOCKET + TOKEN
-    # apuntando dentro (nunca al path del host). Sin socket: ni bind ni
-    # env (cero regresion).
+    # ARXY_BRIDGE_SOCKET + TOKEN apuntando dentro (nunca al path del host).
+    # Sin socket: ni bind ni env (cero regresion).
+    # El socket vive bajo /run o /tmp (compartidos con el host): ya es
+    # visible dentro en la MISMA ruta, sin bind. Bindear a un path fijo
+    # bajo /run falla como usuario (EPERM en /run ajeno) y rompia TODO
+    # 'run' con el daemon vivo (Commit 18, verificado en Void musl: hasta
+    # 'run id -u' caia). Solo se bindea si el socket vive fuera de lo
+    # compartido (XDG raro), a /tmp (sticky: creable por cualquiera).
     ensure_bridge_daemon || true
     local _bsock=""
     _bsock="$(bridge_sock_path)"
@@ -289,7 +294,10 @@ run_in() {
         local _bpid
         _bpid="${_bsock%.sock}.pid"
         if [[ ! -f "$_bpid" ]] || bridge_pid_alive "$_bpid"; then
-            b+=(--bind "$_bsock" /run/arxy-bridge.sock --setenv ARXY_BRIDGE_SOCKET /run/arxy-bridge.sock)
+            case "$_bsock" in
+                /run/*|/tmp/*) b+=(--setenv ARXY_BRIDGE_SOCKET "$_bsock") ;;
+                *) b+=(--bind "$_bsock" /tmp/arxy-bridge.sock --setenv ARXY_BRIDGE_SOCKET /tmp/arxy-bridge.sock) ;;
+            esac
             local _btok
             _btok="$(cat "${_bsock%.sock}.token" 2>/dev/null || true)"
             [[ -n "$_btok" ]] && b+=(--setenv ARXY_BRIDGE_TOKEN "$_btok")

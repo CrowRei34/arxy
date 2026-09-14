@@ -71,7 +71,7 @@ t "T19 sin binario: limpio sin error" "unset" -- env ARXY_BRIDGE_BIN=/nonexisten
 echo "== T16: auto-arranque al primer run =="
 "$BIN" run /bin/true >/dev/null 2>&1
 [[ -S "$SOCK" ]] && echo "PASS: T16 daemon auto-arrancado" || { echo "FAIL: T16 auto-arranque"; FAIL=$((FAIL+1)); }
-t "T16 env dentro tras auto-arranque" "/run/arxy-bridge.sock" -- "$BIN" run sh -c 'echo ${ARXY_BRIDGE_SOCKET-unset}'
+t "T16 env dentro tras auto-arranque" "$SOCK" -- "$BIN" run sh -c 'echo ${ARXY_BRIDGE_SOCKET-unset}'
 out="$("$BIN" run sh -c 'echo "T=${ARXY_BRIDGE_TOKEN:-ausente}"' 2>&1)"
 grep -qE "T=[0-9a-f]{16,}" <<<"$out" && echo "PASS: T16 token dentro" || { echo "FAIL: T16 token dentro (tengo [$out])"; FAIL=$((FAIL+1)); }
 

@@ -95,6 +95,8 @@ re-ejecuta con `sudo`.
 | `arxy quickstart` | te dice el siguiente paso según estado |
 | `arxy dedup` | hardlinkea idénticos de `/usr` (auto tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
 | `axy` | alias corto de `arxy` |
+| `arxy install arxy-gaming [--dry-run]` | stack gaming segun GPU (rewrite a `arxy-gaming-<vendor>`; la parte AUR se compila como usuario) |
+| `arxy host-bridge [--daemon\|--stop\|--status]` | daemon host-bridge (Fase 5; notificaciones/links del sandbox al host) |
 
 ```bash
 arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
@@ -130,6 +132,18 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
   L1+L2, iris acelerado, softpipe sin LLVM, app Electron con ventana
   real. (`dbus-send` no viene en la mini: ese check da SKIP honesto;
   `arxy install dbus` lo activa.)
+
+## Steam end-to-end (manual; no automatizable)
+
+1. `arxy install arxy-gaming` (Steam, Proton, Wine; la parte AUR se
+   compila como tu usuario, no como root).
+2. `arxy host-bridge --daemon` (opcional: notificaciones y links del
+   sandbox al host).
+3. `arxy run steam` **como tu usuario** (Steam se niega a correr como
+   root, por Valve). El primer arranque auto-descarga su runtime
+   (cientos de MB): tarda minutos, es de upstream, no de arxy.
+4. Login, instala un juego ligero, juega.
+5. Verifica aceleracion: `MANGOHUD=1 arxy run steam` (overlay MangoHUD).
 
 ## Cómo contribuir
 

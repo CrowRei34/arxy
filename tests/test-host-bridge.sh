@@ -75,6 +75,39 @@ flock() { return 1; }
 if ensure_bridge_daemon; then echo "PASS: sin flock rc 0"; else echo "FAIL: sin flock rc"; FAIL=$((FAIL+1)); fi
 [[ ! -S "$D/arxy-bridge.sock" ]] && echo "PASS: sin flock no arranca" || { echo "FAIL: sin flock arranco"; FAIL=$((FAIL+1)); }
 unset -f flock
+echo "== P5: sin binario flock (PATH minimo) tambien degrada limpio =="
+mkdir -p "$D/nolk"
+for _t in cat chmod sleep rm mktemp od tr head; do ln -sf "$(command -v "$_t")" "$D/nolk/$_t" 2>/dev/null || true; done
+if ( unset -f flock 2>/dev/null; PATH="$D/nolk" ensure_bridge_daemon ); then echo "PASS: sin binario rc 0"; else echo "FAIL: sin binario rc"; FAIL=$((FAIL+1)); fi
+[[ ! -S "$D/arxy-bridge.sock" ]] && echo "PASS: sin binario no arranca" || { echo "FAIL: sin binario arranco"; FAIL=$((FAIL+1)); }
+
+echo "== P1: xdg-open mock recibe URL (sin abrir navegador) =="
+if command -v python3 >/dev/null 2>&1; then
+    mkdir -p "$D/mockbin"
+    printf '#!/bin/sh\necho "$1" >> "%s/got.txt"\n' "$D" > "$D/mockbin/xdg-open"
+    chmod +x "$D/mockbin/xdg-open"
+    "$BIN" host-bridge --daemon --socket "$D/x.sock" --allowed-cmd "$D/mockbin/xdg-open" >/dev/null 2>&1
+    tok="$(cat "$D/x.token" 2>/dev/null || true)"
+    out="$(python3 - "$D/x.sock" "$tok" "$D" <<'EOF' 2>&1
+import socket, struct, json, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(10); s.connect(sys.argv[1])
+b = json.dumps({'type':'request','command':[sys.argv[3] + '/mockbin/xdg-open','https://example.com/t-1'],'token':sys.argv[2]}).encode()
+s.sendall(struct.pack('>I', len(b)) + b)
+while True:
+    h = s.recv(4)
+    if not h: print('EOF'); break
+    (n,) = struct.unpack('>I', h)
+    js = json.loads(s.recv(n).decode())
+    print(js.get('type'), js.get('code', js.get('error','')))
+    if js.get('type') in ('exit','error'): break
+EOF
+)"
+    grep -q "https://example.com/t-1" "$D/got.txt" 2>/dev/null && echo "PASS: P1 URL al mock" || { echo "FAIL: P1 URL al mock (tengo [$out])"; FAIL=$((FAIL+1)); }
+    grep -q "^exit 0$" <<<"$out" && echo "PASS: P1 exit 0" || { echo "FAIL: P1 exit (tengo [$out])"; FAIL=$((FAIL+1)); }
+    "$BIN" host-bridge --stop --socket "$D/x.sock" >/dev/null 2>&1 || true
+else
+    echo "SKIP: P1 sin python3"
+fi
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
