@@ -26,13 +26,8 @@ t "AMD 1002" "0x1002" "amd"
 t "NVIDIA 10de" "0x10de" "nvidia"
 t "Intel 8086 calla" "0x8086" "no discreta"
 t "sin cards calla" "-" "no discreta"
-# doctor usa el mismo detect_gpu (con imagen mini avisa de verdad).
-# Ojo pipefail: doctor retorna 1 si falta algo (bwrap en containers), asi
-# que se captura la salida (|| true) y decide el grep, no el rc.
-fake "0x1002"
-_doc="$(ARXY_SYS_DRM_PATH="$D" arxy doctor 2>&1 || true)"
-if grep -q "aviso GPU AMD" <<<"$_doc"; then echo "PASS: doctor avisa con AMD";
-else echo "FAIL: doctor avisa con AMD"; FAIL=$((FAIL+1)); fi
+# doctor_gpu se prueba tras sourcear lib (necesita overrides image_ok/is_mesa_mini; ver abajo).
+# Ojo pipefail: se captura la salida (|| true) y decide el grep, no el rc.
 
 # --- Commit 9: heuristica NVIDIA pura, con mocks (sin root ni GPU real) ---
 HERE="$(dirname "$0")"
@@ -44,6 +39,14 @@ HERE="$(dirname "$0")"
 . "$HERE/../lib/10-level.sh" >/dev/null 2>&1
 # shellcheck source=../lib/60-hw.sh
 . "$HERE/../lib/60-hw.sh" >/dev/null 2>&1
+
+# doctor_gpu exige imagen mini (is_mesa_mini): con mesa completa retorna 0.
+# Override determinista (patrón test-arxy-gaming.sh) en subshell del $()
+# para no filtrar al resto del test; captura antes de grep (pipefail/SIGPIPE).
+fake "0x1002"
+_doc="$(image_ok() { return 0; }; is_mesa_mini() { return 0; }; ARXY_SYS_DRM_PATH="$D" doctor_gpu 2>&1 || true)"
+if grep -q "aviso GPU AMD" <<<"$_doc"; then echo "PASS: doctor avisa con AMD";
+else echo "FAIL: doctor avisa con AMD"; FAIL=$((FAIL+1)); fi
 
 g() { # g <nombre> <quiero> <tengo>
     if [[ "$3" == "$2" ]]; then echo "PASS: $1";
@@ -140,8 +143,14 @@ g "bwrap_base intacto con mocks" "0" "$out"
 ( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_NVIDIA_LIB_ROOT="$E/r" ARXY_NVIDIA_LIB_ROOT64="$E/r64" ARXY_NVIDIA_LIB_ROOT32="$E/r32" ARXY_VULKAN_ICD_PATH="$E/r" ARXY_EGL_PLATFORM_PATH="$E/r" ARXY_DEV_PATH="$E/r" run_in -- /bin/true ) >/dev/null 2>&1
 g "run_in vacio sin NVIDIA" "0" "$(grep -c arxy-nvidia "$REC" || true)"
 # con NVIDIA -> dirs antes que binds, dev-bind, ro-bind-data con contenido
-( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_LIB_ROOT32="$M/r32" ARXY_VULKAN_ICD_PATH="$V/vk" ARXY_EGL_PLATFORM_PATH="$V/egl" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
-grep -q -- '--dev-bind' "$REC" && grep -q "nvidia0" "$REC" && echo "PASS: run_in dev-bind nvidia0" || { echo "FAIL: run_in dev-bind"; FAIL=$((FAIL+1)); }
+# Host musl (Void): run_in vacía userspace NVIDIA; mock glibc (ld-linux sin
+# ld-musl → detect_libc=glibc, invierte el bloque musl de abajo) para no activar el wipe.
+mkdir -p "$D/glibclib" "$D/glibclib64"
+touch "$D/glibclib64/ld-linux-x86-64.so.2"
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_LIB_DIR="$D/glibclib" ARXY_LIB64_DIR="$D/glibclib64" ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_LIB_ROOT32="$M/r32" ARXY_VULKAN_ICD_PATH="$V/vk" ARXY_EGL_PLATFORM_PATH="$V/egl" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
+# Mock ARXY_DEV_PATH fuera de /dev/* → run_in usa --ro-bind (no --dev-bind);
+# se acepta cualquiera pero se exige nvidia0 (si cae el bind, falla igual).
+grep -qE -- '--(dev-bind|ro-bind)' "$REC" && grep -q "nvidia0" "$REC" && echo "PASS: run_in dev-bind nvidia0" || { echo "FAIL: run_in dev-bind"; FAIL=$((FAIL+1)); }
 grep -q "libcuda" "$REC" && grep -q "arxy-nvidia/lib64" "$REC" && echo "PASS: run_in ro-bind lib" || { echo "FAIL: run_in ro-bind lib"; FAIL=$((FAIL+1)); }
 dline="$(grep -n -- '--dir' "$REC" | head -1 | cut -d: -f1)"; bline="$(grep -n "arxy-nvidia/lib64/libcuda" "$REC" | head -1 | cut -d: -f1)"
 [[ -n "$dline" && -n "$bline" && "$dline" -lt "$bline" ]] && echo "PASS: run_in dir antes que bind" || { echo "FAIL: run_in orden dir/bind"; FAIL=$((FAIL+1)); }

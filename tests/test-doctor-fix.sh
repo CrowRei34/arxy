@@ -24,7 +24,13 @@ t "fix lista 5" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes availab
 t "fix lista staging-cleanup" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "staging-cleanup"' "$BIN"
 t "fix hint sin aplicar" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "repite con --apply"' "$BIN"
 t "fix --json rc == json" -- sh -c '"$0" doctor --fix --json >/dev/null 2>&1; a=$?; "$0" doctor --json >/dev/null 2>&1; test "$a" -eq "$?"' "$BIN"
-t "fix --json fixes_available" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"fixes_available\": \[\"hold-mesa\"\]"' "$BIN"
+# Mock glibc aislado del host (Void musl + /dev/dri haría aplicable
+# musl-glibc-stack y el array dejaría de ser ["hold-mesa"]): dir con
+# ld-linux y sin ld-musl fuerza detect_libc=glibc; DEV/SYS vacíos ocultan
+# dri/nvidia del host. Si hold-mesa desaparece, el grep sigue fallando.
+mkdir -p "$D/glibclib" "$D/glibclib64" "$D/emptydev" "$D/emptyroot"
+touch "$D/glibclib64/ld-linux-x86-64.so.2"
+t "fix --json fixes_available" -- sh -c 'ARXY_LIB_DIR="'"$D"'/glibclib" ARXY_LIB64_DIR="'"$D"'/glibclib64" ARXY_DEV_PATH="'"$D"'/emptydev" ARXY_SYS_ROOT="'"$D"'/emptyroot" ARXY_SYS_DRM_PATH="'"$D"'/emptyroot/drm" "$0" doctor --fix --json 2>/dev/null | grep -q "\"fixes_available\": \[\"hold-mesa\"\]"' "$BIN"
 t "fix --json objetos phase" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": [a-z]*, \"destructive\": false, \"requires_root\": true"' "$BIN"
 t "fix --json staging-cleanup phase null" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"staging-cleanup\", \"applicable\": false.*\"phase\": null"' "$BIN"
 t "fix --apply --json avisa" -- sh -c '"$0" doctor --fix --apply --json 2>/dev/null >/dev/null; "$0" doctor --fix --apply --json 2>&1 >/dev/null | grep -q "lista fixes sin aplicarlos"' "$BIN"

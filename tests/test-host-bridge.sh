@@ -109,5 +109,56 @@ else
     echo "SKIP: P1 sin python3"
 fi
 
+echo "== P6: notify-send --print-id real via bridge (sin UI bloqueante) =="
+if ! command -v notify-send >/dev/null 2>&1; then
+    echo "SKIP: P6 sin notify-send"
+elif ! command -v busctl >/dev/null 2>&1 || ! command -v timeout >/dev/null 2>&1; then
+    echo "SKIP: P6 sin busctl/timeout"
+else
+    # Regla 5 (pipefail): capturar en variable y grepear despues, nunca prod | grep.
+    bus_list="$(busctl --user list 2>&1 || true)"
+    if ! grep -q "org.freedesktop.Notifications" <<<"$bus_list"; then
+        echo "SKIP: P6 sin daemon org.freedesktop.Notifications"
+    elif ! timeout 5 notify-send --print-id "arxy-p6-gate" "gate" >/dev/null 2>&1; then
+        echo "SKIP: P6 notify-send --print-id falla en este host"
+    elif ! command -v python3 >/dev/null 2>&1; then
+        echo "SKIP: P6 sin python3"
+    else
+        ns_path="$(command -v notify-send)"
+        "$BIN" host-bridge --daemon --socket "$D/n6.sock" --allowed-cmd "$ns_path" >/dev/null 2>&1
+        tok6="$(cat "$D/n6.token" 2>/dev/null || true)"
+        # timeout externo: notify-send no abre UI, pero el test nunca cuelga.
+        out6="$(timeout 15 python3 - "$D/n6.sock" "$tok6" "$ns_path" <<'EOF' 2>&1
+import socket, struct, json, base64, sys
+s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); s.settimeout(10); s.connect(sys.argv[1])
+b = json.dumps({'type':'request','command':[sys.argv[3],'--print-id','arxy-p6','bridge-ok'],'token':sys.argv[2]}).encode()
+s.sendall(struct.pack('>I', len(b)) + b)
+data = b''
+while True:
+    h = s.recv(4)
+    if not h: print('EOF'); break
+    (n,) = struct.unpack('>I', h)
+    js = json.loads(s.recv(n).decode())
+    t = js.get('type')
+    if t == 'output':
+        data += base64.b64decode(js.get('data', ''))
+    elif t == 'exit':
+        print('OUT:' + base64.b64encode(data).decode())
+        print('%s %s' % (t, js.get('code', '')))
+        break
+    elif t == 'error':
+        print('%s %s' % (t, js.get('error', '')))
+        break
+EOF
+)"
+        grep -q "^exit 0$" <<<"$out6" && echo "PASS: P6 exit 0" || { echo "FAIL: P6 exit (tengo [$out6])"; FAIL=$((FAIL+1)); }
+        b64_line="$(grep '^OUT:' <<<"$out6" || true)"
+        b64="${b64_line#OUT:}"
+        dec6="$(printf '%s' "$b64" | base64 -d 2>/dev/null || true)"
+        grep -qE "^[0-9]+$" <<<"$dec6" && echo "PASS: P6 id numerico" || { echo "FAIL: P6 id (tengo [$out6] dec [$dec6])"; FAIL=$((FAIL+1)); }
+        "$BIN" host-bridge --stop --socket "$D/n6.sock" >/dev/null 2>&1 || true
+    fi
+fi
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
