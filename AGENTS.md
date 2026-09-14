@@ -59,6 +59,15 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - Montaje solo en `run_in()` (run/shell; pacman via `in_bwrap` intacto).
   ICDs por `--ro-bind-data` desde FD (sin tmpdirs ni traps; requiere
   bwrap con `--ro-bind-data`). Sin NVIDIA, args identicos a antes.
+- musl (`detect_libc`): `run_in` vacia libs+ICDs del host (devices ya
+  vienen con `--dev-bind /dev`); `musl-glibc-stack` instala el ICD
+  Vulkan del vendor (`gpu_stack_pkgs()`, unica fuente para would_do y
+  apply; GL/DRI ya lo trae mesa-mini).
+
+## Tech debt grepeable
+
+- `ponytail:` en comentarios = atajo deliberado con techo conocido y
+  upgrade path. `grep -rn 'ponytail:' lib/ tests/` lista la deuda viva.
 - Mocks GPU (patrón `ARXY_SYS_DRM_PATH`, probativos: sin mock → vacío):
   `ARXY_SYS_ROOT` (reutilizado para `/proc/driver/nvidia` y
   `/sys/module/nvidia`; NO hay `ARXY_NVIDIA_SYSFS_PATH` separado),

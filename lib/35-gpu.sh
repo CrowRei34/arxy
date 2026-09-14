@@ -119,3 +119,15 @@ nvidia_mounts() { # "host<TAB>guest" (libs + ICDs + devices; "" = nada)
     done < <(detect_dev_nodes 2>/dev/null | grep nvidia || true)
     return 0
 }
+
+gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
+    # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
+    # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
+    # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
+    case "$(detect_gpu || true)" in
+        nvidia) printf '%s\n' nvidia-utils lib32-nvidia-utils ;;
+        amd) printf '%s\n' vulkan-radeon lib32-vulkan-radeon ;;
+        *) printf '%s\n' vulkan-intel lib32-vulkan-intel ;;
+    esac
+    return 0
+}

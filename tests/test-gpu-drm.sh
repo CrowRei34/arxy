@@ -149,5 +149,23 @@ grep -q "FDCONTENT /usr/share/vulkan/icd.d/nvidia_icd.json" "$REC" && echo "PASS
 grep -q '"/usr/lib/arxy-nvidia/lib64/libGLX_nvidia.so.0"' "$REC" && echo "PASS: run_in icd reescrito en FD" || { echo "FAIL: run_in icd contenido FD"; FAIL=$((FAIL+1)); }
 grep -q '"/usr/lib/libGLX_nvidia.so.0"' "$REC" && { echo "FAIL: run_in icd path viejo en FD"; FAIL=$((FAIL+1)); } || echo "PASS: run_in icd sin path viejo"
 
+echo "== musl: sin userspace del host (solo devices de la base)"
+mkdir -p "$D/musllib" "$D/musllib64"
+touch "$D/musllib/ld-musl-x86_64.so.1"
+g "detect_libc mock musl" "musl" "$(ARXY_LIB_DIR="$D/musllib" ARXY_LIB64_DIR="$D/musllib64" detect_libc)"
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_LIB_DIR="$D/musllib" ARXY_LIB64_DIR="$D/musllib64" ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_LIB_ROOT32="$M/r32" ARXY_VULKAN_ICD_PATH="$V/vk" ARXY_EGL_PLATFORM_PATH="$V/egl" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
+g "run_in musl+NVIDIA sin arxy-nvidia" "0" "$(grep -c arxy-nvidia "$REC" || true)"
+g "run_in musl sin ro-bind-data" "0" "$(grep -c -- --ro-bind-data "$REC" || true)"
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_LIB_DIR="$D/musllib" ARXY_LIB64_DIR="$D/musllib64" ARXY_NVIDIA_LIB_ROOT="$E/r" ARXY_NVIDIA_LIB_ROOT64="$E/r64" ARXY_NVIDIA_LIB_ROOT32="$E/r32" ARXY_VULKAN_ICD_PATH="$E/r" ARXY_EGL_PLATFORM_PATH="$E/r" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
+g "run_in musl+AMD(dri) sin arxy-nvidia" "0" "$(grep -c arxy-nvidia "$REC" || true)"
+
+echo "== gpu_stack_pkgs por vendor"
+mkdir -p "$D/drmA/card0/device" "$D/drmN/card0/device"
+printf '0x1002' > "$D/drmA/card0/device/vendor"
+printf '0x10de' > "$D/drmN/card0/device/vendor"
+g "stack amd" "vulkan-radeon lib32-vulkan-radeon" "$(ARXY_SYS_DRM_PATH="$D/drmA" gpu_stack_pkgs | xargs)"
+g "stack nvidia" "nvidia-utils lib32-nvidia-utils" "$(ARXY_SYS_DRM_PATH="$D/drmN" gpu_stack_pkgs | xargs)"
+g "stack sin discreta asume intel" "vulkan-intel lib32-vulkan-intel" "$(ARXY_SYS_DRM_PATH="$E/r" gpu_stack_pkgs | xargs)"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

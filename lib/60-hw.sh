@@ -159,7 +159,7 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            echo "todo|libc musl con GPU: el stack del host no sirve|instalar mesa+vulkan glibc en rootfs (Fase 4)|"
+            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $(gpu_stack_pkgs | xargs)|"
             ;;
         gpu-full-stack)
             g="$(detect_gpu || true)"
@@ -249,6 +249,14 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 elif [[ "$fid" == staging-cleanup && -n "$apply" ]]; then
                     recover_staging >/dev/null
                     echo "  [hecho] $fid aplicado (ver 'recovered:' arriba)"
+                elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
+                    local -a _sp
+                    mapfile -t _sp < <(gpu_stack_pkgs)
+                    if cmd_install "${_sp[@]}"; then
+                        echo "  [hecho] $fid aplicado"
+                    else
+                        echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                    fi
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
                 fi

@@ -219,6 +219,9 @@ run_in() {
     local _nvm _nvi
     _nvm="$(nvidia_mounts 2>/dev/null || true)"
     _nvi="$(nvidia_icds 2>/dev/null || true)"
+    # musl: el userspace grafico del host no sirve en el rootfs glibc;
+    # fuera libs+ICDs (devices ya vienen con --dev-bind /dev de la base).
+    if [[ "$(detect_libc 2>/dev/null || true)" == musl ]]; then _nvm=""; _nvi=""; fi
     if [[ -n "$_nvm$_nvi" ]]; then
         # --dir antes que los binds (bwrap procesa en orden; el / ya viene
         # bindeado primero desde bwrap_base). Solo lib64/lib32: el driver
@@ -1340,6 +1343,18 @@ nvidia_mounts() { # "host<TAB>guest" (libs + ICDs + devices; "" = nada)
     done < <(detect_dev_nodes 2>/dev/null | grep nvidia || true)
     return 0
 }
+
+gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
+    # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
+    # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
+    # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
+    case "$(detect_gpu || true)" in
+        nvidia) printf '%s\n' nvidia-utils lib32-nvidia-utils ;;
+        amd) printf '%s\n' vulkan-radeon lib32-vulkan-radeon ;;
+        *) printf '%s\n' vulkan-intel lib32-vulkan-intel ;;
+    esac
+    return 0
+}
 # --- lectura (corre como usuario)
 cmd_info() {
     [[ $# -ge 1 ]] || die "uso: $PROG info <paquete>"
@@ -1822,7 +1837,7 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            echo "todo|libc musl con GPU: el stack del host no sirve|instalar mesa+vulkan glibc en rootfs (Fase 4)|"
+            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $(gpu_stack_pkgs | xargs)|"
             ;;
         gpu-full-stack)
             g="$(detect_gpu || true)"
@@ -1912,6 +1927,14 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 elif [[ "$fid" == staging-cleanup && -n "$apply" ]]; then
                     recover_staging >/dev/null
                     echo "  [hecho] $fid aplicado (ver 'recovered:' arriba)"
+                elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
+                    local -a _sp
+                    mapfile -t _sp < <(gpu_stack_pkgs)
+                    if cmd_install "${_sp[@]}"; then
+                        echo "  [hecho] $fid aplicado"
+                    else
+                        echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                    fi
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
                 fi

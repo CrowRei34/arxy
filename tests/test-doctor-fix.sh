@@ -46,6 +46,11 @@ if [[ "$(id -u)" -eq 0 ]]; then
 else
     t "fix --apply sin root falla claro" -- sh -c '! "$0" doctor --fix --apply 2>/dev/null; "$0" doctor --fix --apply 2>&1 | grep -q "necesita root"' "$BIN"
 fi
+# musl-glibc-stack: would_do preciso por vendor (usa gpu_stack_pkgs).
+mkdir -p "$D/drmA/card0/device"
+printf '0x1002' > "$D/drmA/card0/device/vendor"
+t "musl would_do intel por defecto" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-intel lib32-vulkan-intel"' "$BIN"
+t "musl would_do amd con drm" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" ARXY_SYS_DRM_PATH="'"$D"'/drmA" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-radeon lib32-vulkan-radeon"' "$BIN"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

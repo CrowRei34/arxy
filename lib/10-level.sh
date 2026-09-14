@@ -66,6 +66,9 @@ run_in() {
     local _nvm _nvi
     _nvm="$(nvidia_mounts 2>/dev/null || true)"
     _nvi="$(nvidia_icds 2>/dev/null || true)"
+    # musl: el userspace grafico del host no sirve en el rootfs glibc;
+    # fuera libs+ICDs (devices ya vienen con --dev-bind /dev de la base).
+    if [[ "$(detect_libc 2>/dev/null || true)" == musl ]]; then _nvm=""; _nvi=""; fi
     if [[ -n "$_nvm$_nvi" ]]; then
         # --dir antes que los binds (bwrap procesa en orden; el / ya viene
         # bindeado primero desde bwrap_base). Solo lib64/lib32: el driver
