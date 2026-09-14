@@ -72,6 +72,10 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   `[multilib]` se habilita idempotente; PKGBUILDs en `packaging/aur/`
   espejan la lista bash (sincronizar al publicar; sin base: nunca se
   publica `arxy-gaming` pelado).
+- bridge (Fase 5): `ARXY_NO_BRIDGE=1` desactiva auto-arranque+montaje;
+  `ARXY_BRIDGE_ALLOWLIST` (nombres, default interno sin proton);
+  `ARXY_BRIDGE_TOKEN` lo inyecta `run_in` desde el fichero del daemon
+  (alcance: daemon, Commit 17 lo refina por instancia).
 
 ## Tech debt grepeable
 

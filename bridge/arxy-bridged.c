@@ -49,6 +49,7 @@
 static char **g_allow;
 static int g_nallow;
 static const char *g_sockpath;
+static const char *g_token = NULL; // NULL = sin exigir (compat tests sin token)
 
 static void die(const char *m) { fprintf(stderr, "arxy-bridged: %s\n", m); exit(1); }
 static void usage(void) { fprintf(stderr, "uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]\n"); }
@@ -276,10 +277,10 @@ static int jskip(J *j, int depth) { // salta cualquier valor (solo overflow de c
     return 0;
 }
 
-typedef struct { char type[16]; char **cmd; size_t *clen; int ncmd; int tty; long w, h; char *data; size_t datalen; } Req;
+typedef struct { char type[16]; char **cmd; size_t *clen; int ncmd; int tty; long w, h; char *data; size_t datalen; char *token; } Req;
 static void req_free(Req *r) {
     for (int i = 0; i < r->ncmd && r->cmd; i++) free(r->cmd[i]);
-    free(r->cmd); free(r->clen); free(r->data);
+    free(r->cmd); free(r->clen); free(r->data); free(r->token);
     memset(r, 0, sizeof *r);
 }
 static int parse_req(const uint8_t *b, size_t n, Req *r) {
@@ -344,6 +345,10 @@ static int parse_req(const uint8_t *b, size_t n, Req *r) {
             size_t l; char *v = jstr(&j, &l);
             if (!v) { free(k); return -1; }
             free(r->data); r->data = v; r->datalen = l;
+        } else if (!strcmp(k, "token")) {
+            size_t l; char *v = jstr(&j, &l);
+            if (!v) { free(k); return -1; }
+            free(r->token); r->token = v;
         } else { free(k); return -1; } // strict: clave desconocida fuera
         free(k); jws(&j);
         if (j.p >= j.end) return -1;
@@ -604,7 +609,12 @@ static void handle(int cfd) {
     free(fr.pl);
     const char *why = "bad request";
     char *abs = NULL;
-    if (!ok && !strcmp(q.type, "request")) abs = authorize(q.cmd, q.clen, q.ncmd, &why);
+    // Token solo en request (lo que ejecuta): input/resize van en una
+    // conexion ya aceptada por UID (Commit 17 refina por instancia).
+    if (!ok && !strcmp(q.type, "request")) {
+        if (g_token && (!q.token || strcmp(q.token, g_token))) why = "bad token";
+        else abs = authorize(q.cmd, q.clen, q.ncmd, &why);
+    }
     if (!abs) { merror(cfd, why); req_free(&q); close(cfd); return; }
     char **av = malloc(((size_t)q.ncmd + 1) * sizeof *av);
     if (!av) { merror(cfd, "out of memory"); free(abs); req_free(&q); close(cfd); return; }
@@ -653,6 +663,7 @@ int main(int argc, char **argv) {
     const char *sock = NULL;
     for (int i = 1; i < argc; i++) {
         if ((!strcmp(argv[i], "--socket")) && i + 1 < argc) sock = argv[++i];
+        else if ((!strcmp(argv[i], "--token")) && i + 1 < argc) { i++; g_token = argv[i]; }
         else if ((!strcmp(argv[i], "--allowed-cmd")) && i + 1 < argc) {
             i++;
             char *rp = resolve_cmd(argv[i]);

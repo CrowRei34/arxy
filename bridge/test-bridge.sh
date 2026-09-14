@@ -291,6 +291,32 @@ else
     fail "liveness: esperado [$exp_out], obtenido [$out]"
 fi
 
+# --- 17-19. token del daemon (--token): sin token y mal token fuera ---
+"$BIN" --socket "$TMPD/br2.sock" --token deadbeef1234 --allowed-cmd /bin/echo >"$TMPD/s2.log" 2>&1 &
+SRV2=$!
+sleep 0.5
+out="$(python3 "$TMPD/bc.py" rawjson "$TMPD/br2.sock" '{"type":"request","command":["/bin/echo","hi"]}')"
+if grep -q 'ERROR:bad token' <<<"$out"; then
+    pass "sin token rechazado"
+else
+    fail "token-missing: esperado ERROR:bad token, obtenido [$out]"
+fi
+out="$(python3 "$TMPD/bc.py" rawjson "$TMPD/br2.sock" '{"type":"request","command":["/bin/echo","hi"],"token":"mal"}')"
+if grep -q 'ERROR:bad token' <<<"$out"; then
+    pass "token malo rechazado"
+else
+    fail "token-wrong: esperado ERROR:bad token, obtenido [$out]"
+fi
+out="$(python3 "$TMPD/bc.py" rawjson "$TMPD/br2.sock" '{"type":"request","command":["/bin/echo","tok-ok"],"token":"deadbeef1234"}')"
+exp_out="OUT:$(printf 'tok-ok\n' | base64)"
+if test "${out%%$'\n'*}" = "$exp_out"; then
+    pass "token bueno ejecuta"
+else
+    fail "token-ok: esperado [$exp_out], obtenido [$out]"
+fi
+kill "$SRV2" 2>/dev/null || true
+rm -f "$TMPD/br2.sock"
+
 echo "----"
 echo "FAIL=$FAIL"
 if test "$FAIL" -ne 0; then

@@ -33,7 +33,8 @@ te() { # te <nombre> <grep> -- <cmd...> : debe FALLAR y el texto matchear
 
 t "help" -- "$BIN" host-bridge --help
 te "status sin daemon" "inactivo" -- "$BIN" host-bridge --status --socket "$SOCK"
-te "sin allowlist no arranca" "allowed-cmd" -- "$BIN" host-bridge --daemon --socket "$SOCK"
+# (sin allowlist: el default resuelve en este host; el caso vacio
+# determinista vive en T19 con ARXY_BRIDGE_ALLOWLIST imposible)
 te "stop sin daemon" "sin daemon vivo" -- "$BIN" host-bridge --stop --socket "$SOCK"
 t "daemon arranca" -- "$BIN" host-bridge --daemon --socket "$SOCK" --allowed-cmd /bin/echo
 [[ -S "$SOCK" ]] && echo "PASS: socket existe" || { echo "FAIL: socket existe"; FAIL=$((FAIL+1)); }
@@ -46,6 +47,23 @@ t "stop" -- "$BIN" host-bridge --stop --socket "$SOCK"
 te "status tras stop" "inactivo" -- "$BIN" host-bridge --status --socket "$SOCK"
 t "socket custom" -- "$BIN" host-bridge --daemon --socket "$D/otro.sock" --allowed-cmd /bin/echo
 t "stop custom" -- "$BIN" host-bridge --stop --socket "$D/otro.sock"
+
+echo "== allowlist por nombre y defaults =="
+t "T16 bare name resuelve via PATH" -- "$BIN" host-bridge --daemon --socket "$D/n.sock" --allowed-cmd echo
+t "T16 stop" -- "$BIN" host-bridge --stop --socket "$D/n.sock"
+te "T17 explicito malo muere claro" "not executable" -- "$BIN" host-bridge --daemon --socket "$D/m.sock" --allowed-cmd nonexistent-binary-xyz
+te "T18 allowed-cmd vacio" "falta binario" -- "$BIN" host-bridge --daemon --socket "$D/m.sock" --allowed-cmd ""
+t "T19 config lista" -- env ARXY_BRIDGE_ALLOWLIST="echo" "$BIN" host-bridge --daemon --socket "$D/c.sock"
+t "T19 stop" -- "$BIN" host-bridge --stop --socket "$D/c.sock"
+te "T19 nada resuelve" "allowlist vacia" -- env ARXY_BRIDGE_ALLOWLIST="nonexistent-xyz" "$BIN" host-bridge --daemon --socket "$D/c.sock"
+echo "== T20: pid reutilizado no miente =="
+"$BIN" host-bridge --daemon --socket "$D/p.sock" --allowed-cmd /bin/echo >/dev/null 2>&1
+echo "$$" > "${D}/p.pid"
+te "T20 status con pid ajeno" "inactivo" -- "$BIN" host-bridge --status --socket "$D/p.sock"
+# Limpieza del daemon huerfano (pidfile pisado): por nombre exacto, nunca -f
+for _p in $(pgrep -x arxy-bridged 2>/dev/null || true); do kill "$_p" 2>/dev/null || true; done
+rm -f "$D/p.sock" "$D/p.pid"
+echo "PASS: T20 limpieza"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

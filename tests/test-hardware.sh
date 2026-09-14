@@ -6,6 +6,9 @@
 # Depende de red solo si falta mesa-utils (se instala con sudo no interactivo).
 set -uo pipefail
 FAIL=0; SKIP=0
+# Sin bridge aqui (auto-arranque ensuciaria la sesion; el bridge se prueba
+# en test-host-bridge.sh y test-bridge-in-container.sh).
+export ARXY_NO_BRIDGE=1
 
 say()  { echo "$1: $2"; }
 pass() { say PASS "$1"; }

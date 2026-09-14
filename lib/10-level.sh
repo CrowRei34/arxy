@@ -111,17 +111,25 @@ run_in() {
             b+=(--ro-bind-data "$_nfd" "$_d/$(basename "$_ip")")
         done <<<"$_nvi"
     fi
-    # Bridge (Fase 5): si el daemon corre, su socket entra a
-    # /run/arxy-bridge.sock con ARXY_BRIDGE_SOCKET apuntando dentro (nunca
-    # al path del host). Sin socket: ni bind ni env (cero regresion).
+    # Bridge (Fase 5): auto-arranque best-effort (nunca rompe run) y
+    # montaje a /run/arxy-bridge.sock con ARXY_BRIDGE_SOCKET + TOKEN
+    # apuntando dentro (nunca al path del host). Sin socket: ni bind ni
+    # env (cero regresion).
+    ensure_bridge_daemon || true
     local _bsock=""
-    if [[ -n "${XDG_RUNTIME_DIR:-}" && -S "$XDG_RUNTIME_DIR/arxy-bridge.sock" ]]; then
-        _bsock="$XDG_RUNTIME_DIR/arxy-bridge.sock"
-    elif [[ -S "/tmp/arxy-bridge-${UID}.sock" ]]; then
-        _bsock="/tmp/arxy-bridge-${UID}.sock"
-    fi
-    if [[ -n "$_bsock" ]]; then
-        b+=(--bind "$_bsock" /run/arxy-bridge.sock --setenv ARXY_BRIDGE_SOCKET /run/arxy-bridge.sock)
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-${UID}.sock"
+    if [[ -S "$_bsock" && -z "${ARXY_NO_BRIDGE:-}" ]]; then
+        # Solo si esta vivo: socket huerfano (kill -9) no se monta. Sin
+        # pidfile se confia (daemon foreground manual, sin pidfile).
+        local _bpid
+        _bpid="${_bsock%.sock}.pid"
+        if [[ ! -f "$_bpid" ]] || bridge_pid_alive "$_bpid"; then
+            b+=(--bind "$_bsock" /run/arxy-bridge.sock --setenv ARXY_BRIDGE_SOCKET /run/arxy-bridge.sock)
+            local _btok
+            _btok="$(cat "${_bsock%.sock}.token" 2>/dev/null || true)"
+            [[ -n "$_btok" ]] && b+=(--setenv ARXY_BRIDGE_TOKEN "$_btok")
+        fi
     fi
     exec bwrap "${b[@]}" \
         --setenv PATH "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
