@@ -100,6 +100,12 @@ arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
 # {"nivel": 1, "libc": "glibc", "gpu": "intel"}  (format: 1, estable)
 ```
 
+`arxy doctor --fix` informa y propone sin aplicar nada; con `--apply`
+(root) aplica no-destructivos; `--apply --confirm` + tty para destructivos
+(hoy: `db.lck` stale). `--json` nunca aplica: solo lista
+`fixes_available`/`fixes` (`nvidia-align`, `musl-glibc-stack` y
+`gpu-full-stack` proponen; instalar es opt-in futuro).
+
 `setup` persiste ese perfil en `/var/lib/arxy/hardware.json` (caché,
 `format: 1`, atómico y solo-si-cambia): `version --verbose` lo lee y avisa
 si el kernel o nvidia cambiaron; `doctor --json` siempre calcula fresco.

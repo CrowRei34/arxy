@@ -105,6 +105,7 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
   compatible, renombrar/quitar exige `format: 2`. Schema exacto: comentario
   en `lib/60-hw.sh` (única fuente, sin `.md` que derive).
 - `hardware.json` es caché, no fuente: `doctor --json` calcula fresco.
+- `--fix` informa por defecto; `--apply` exige root; destructivos exigen `--confirm` + tty.
 - Mocks de detección (tests sin root ni imagen, patrón `ARXY_SYS_DRM_PATH`):
   `ARXY_SYS_ROOT` (prefijo /proc+/sys), `ARXY_DEV_PATH` (defecto /dev),
   `ARXY_LIB_DIR`/`ARXY_LIB64_DIR` (loaders), `ARXY_SYS_DRM_PATH` (drm).
