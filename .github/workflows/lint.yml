@@ -14,8 +14,14 @@ jobs:
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
 
+      - name: regenerar src/arxy desde lib/ (D9: byte-idéntico)
+        run: |
+          make src/arxy
+          git diff --exit-code src/arxy
+          echo REGEN_OK
+
       - name: bash -n
-        run: bash -n src/arxy && bash -n install.sh && echo BASHN_OK
+        run: bash -n src/arxy && bash -n install.sh && bash -n lib/*.sh && echo BASHN_OK
 
       - name: shellcheck (cero warnings)
         run: shellcheck -S warning src/arxy install.sh && echo SHELLCHECK_OK

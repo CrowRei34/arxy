@@ -1,0 +1,212 @@
+# --- runtime: mount namespace minimo, cero aislamiento
+# Solo /home es passthrough persistente (datos del usuario; ningun paquete
+# instala ahi). /opt /srv /mnt /media /data NO se bindean: pacman escribe
+# ahi dentro y el bind desviaria los ficheros al HOST (paso con /opt).
+# Esas rutas del host se alcanzan via /host (ver resolve_target/inside_dir).
+VISIBLE_DIRS="/home"
+
+bwrap_base() {
+    local d resolv
+    printf '%s\n' --bind "$ARXY_ROOT" /
+    # NOTA: --bind de bwrap es recursivo (MS_REC): arrastra submontajes
+    # (/home en otra particion, /run/media, /dev/pts via --dev-bind).
+    # --bind-try ignora origenes inexistentes (ej. /data, /srv).
+    # El build dir AUR se expone en ruta fija dentro (ver aur_build).
+    for d in $VISIBLE_DIRS; do
+        printf '%s\n' --bind-try "$d" "$d"
+    done
+    [[ -d "$ARXY_BUILD" ]] && printf '%s\n' --bind "$ARXY_BUILD" "$NS_BUILD"
+    printf '%s\n' \
+        --bind /tmp /tmp \
+        --bind /run /run \
+        --dev-bind /dev /dev \
+        --proc /proc \
+        --ro-bind-try /sys /sys \
+        --bind / /host
+    resolv="$(readlink -f /etc/resolv.conf 2>/dev/null || echo /etc/resolv.conf)"
+    if [[ -f "$resolv" ]]; then
+        printf '%s\n' --ro-bind "$resolv" /etc/resolv.conf
+    else
+        msg "aviso: sin resolv.conf valido en el host, el DNS dentro puede fallar" >&2
+    fi
+    [[ -f /etc/hosts ]] && printf '%s\n' --ro-bind /etc/hosts /etc/hosts
+    # La imagen trae /etc/machine-id Grennan ("uninitialized", 13 chars) y Qt/D-Bus
+    # abortan (viber exit 134). Se comparte el del host (ya se comparte el
+    # bus de sesion via /run); /var/lib/dbus/machine-id es symlink a este.
+    if [[ -s /etc/machine-id ]]; then
+        printf '%s\n' --ro-bind /etc/machine-id /etc/machine-id
+    else
+        msg "aviso: host sin machine-id valido, Qt/D-Bus dentro pueden abortar" >&2
+    fi
+    [[ -f /etc/localtime ]] && printf '%s\n' --ro-bind-try /etc/localtime /etc/localtime
+}
+
+# in_bwrap <cmd...> : ejecuta dentro, devuelve codigo (no hace exec).
+# NOTA: sin '--' separador aqui: bwrap toma todo lo que sigue como comando,
+# asi que las opciones (--chdir, --setenv) van antes y el llamador pone
+# su propio '--' justo antes del binario.
+in_bwrap() {
+    local -a b
+    mapfile -t b < <(bwrap_base)
+    bwrap "${b[@]}" \
+        --setenv PATH "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
+        "$@"
+}
+
+# run_in <bwrap-opts...> -- <cmd...> : como in_bwrap pero con exec
+run_in() {
+    local -a b
+    mapfile -t b < <(bwrap_base)
+    exec bwrap "${b[@]}" \
+        --setenv PATH "/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
+        "$@"
+}
+
+run_pacman() {
+    level
+    if [[ "$_ARXY_LEVEL" == 2 ]]; then
+        # Sin namespaces: el pacman del subsistema con rutas explicitas.
+        # Solo lecturas; lo que escribe va por pacman_mut (chroot).
+        # Los Include absolutos (/etc/pacman.d/...) resolverian en el HOST:
+        # se reescriben al rootfs en conf efimera (mktemp: la fija sufria
+        # carrera entre concurrentes). Escrituras intactas (chroot OK).
+        mkdir -p "$ARXY_ROOT/tmp" 2>/dev/null || true
+        local _ro
+        _ro="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy-ro.XXXXXX")" || return 1
+        sed "s|/etc/pacman.d/|$ARXY_ROOT/etc/pacman.d/|g" "$ARXY_ROOT/etc/pacman.conf" > "$_ro" 2>/dev/null || { rm -f "$_ro"; return 1; }
+        in_sys /usr/bin/pacman --root "$ARXY_ROOT" --config "$_ro" \
+            --dbpath "$ARXY_ROOT/var/lib/pacman" "$@"
+        local _rc=$?
+        rm -f "$_ro"
+        return $_rc
+    else
+        in_bwrap /usr/bin/pacman "$@"
+    fi
+}
+
+# --- niveles de ejecucion
+# Nivel 1: bwrap funcional (actual). Nivel 2: sin namespaces — binarios via
+# ld-linux del subsistema (run) y chroot con sudo (install). Sin FUSE en
+# ningun nivel por decision de diseno (ver README). ARXY_LEVEL=1|2 lo fuerza.
+level() { # deja el nivel en _ARXY_LEVEL (memoizado por proceso)
+    [[ -n "${_ARXY_LEVEL:-}" ]] && return 0
+    if [[ "${ARXY_LEVEL:-}" == 1 || "${ARXY_LEVEL:-}" == 2 ]]; then
+        _ARXY_LEVEL="$ARXY_LEVEL"
+    elif command -v bwrap >/dev/null 2>&1 && bwrap --ro-bind / / true 2>/dev/null; then
+        _ARXY_LEVEL=1
+    else
+        _ARXY_LEVEL=2
+    fi
+}
+
+# Entorno canonico para ejecutar binarios del subsistema sin bwrap (nivel 2).
+# Fuente unica: el smoke test la invoca para verificarla. Nunca LD_LIBRARY_PATH.
+level2_env() {
+    unset LD_LIBRARY_PATH # del host: envenenaria al ld-linux del subsistema
+    case ":${XDG_DATA_DIRS:-}:" in
+        *":$ARXY_ROOT/usr/share:"*) ;;
+        *) export XDG_DATA_DIRS="$ARXY_ROOT/usr/share:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" ;;
+    esac
+    export GCONV_PATH="$ARXY_ROOT/usr/lib/gconv"
+    export GSETTINGS_SCHEMA_DIR="$ARXY_ROOT/usr/share/glib-2.0/schemas"
+    if [[ -d "$ARXY_ROOT/usr/lib/girepository-1.0" ]]; then
+        case ":${GI_TYPELIB_PATH:-}:" in
+            *":$ARXY_ROOT/usr/lib/girepository-1.0:"*) ;;
+            *) export GI_TYPELIB_PATH="$ARXY_ROOT/usr/lib/girepository-1.0${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}" ;;
+        esac
+    fi
+    local cache
+    for cache in "$ARXY_ROOT"/usr/lib/gdk-pixbuf-2.0/*/loaders.cache; do
+        [[ -f "$cache" ]] && { export GDK_PIXBUF_MODULE_FILE="$cache"; break; }
+    done
+}
+
+# in_sys <ruta-absoluta-del-subsistema> [args...] : ejecuta en el nivel activo.
+in_sys() {
+    level
+    local bin="$1"; shift
+    if [[ "$_ARXY_LEVEL" == 2 ]]; then
+        case "$bin" in "$ARXY_ROOT"/*) ;; *) bin="$ARXY_ROOT$bin" ;; esac
+        level2_env
+        "$LD_LINUX" --library-path "$ARXY_LIBPATH" "$bin" "$@"
+    else
+        in_bwrap "$bin" "$@"
+    fi
+}
+
+# in_chroot <cmd...> : chroot como root con binds minimos y limpieza.
+# Solo lo que escribe en nivel 2 (pacman -S/-U/-R/-Sy). Los mounts son
+# best-effort: en pelado tambien funciona (verificado en spike).
+in_chroot() {
+    local dst mounted=() rc=0 resolv_bak="" resolv_created=""
+    for dst in "$ARXY_ROOT/proc" "$ARXY_ROOT/sys" "$ARXY_ROOT/dev"; do
+        [[ -d "$dst" ]] || mkdir -p "$dst" 2>/dev/null || continue
+        case "$dst" in
+            */proc) mount -t proc proc "$dst" 2>/dev/null && mounted+=("$dst") ;;
+            *) mount --bind "${dst##"$ARXY_ROOT"}" "$dst" 2>/dev/null && mounted+=("$dst") ;;
+        esac
+    done
+    local real_resolv
+    real_resolv="$(readlink -f /etc/resolv.conf 2>/dev/null || echo /etc/resolv.conf)"
+    if [[ -f "$real_resolv" ]]; then
+        if mount --bind "$real_resolv" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null; then
+            mounted+=("$ARXY_ROOT/etc/resolv.conf")
+        else
+            [[ -e "$ARXY_ROOT/etc/resolv.conf" ]] || resolv_created=1
+            resolv_bak="$ARXY_ROOT/etc/resolv.conf.arxy-bak"
+            cp -a "$ARXY_ROOT/etc/resolv.conf" "$resolv_bak" 2>/dev/null || true
+            cp -L "$real_resolv" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null || true
+        fi
+    fi
+    if [[ -d "$ARXY_BUILD" ]]; then
+        mkdir -p "$ARXY_ROOT$NS_BUILD" 2>/dev/null || true
+        mount --bind "$ARXY_BUILD" "$ARXY_ROOT$NS_BUILD" 2>/dev/null && \
+            mounted+=("$ARXY_ROOT$NS_BUILD")
+    fi
+    # Entorno limpio dentro: nada del host (un LD_LIBRARY_PATH del host seria fatal).
+    chroot "$ARXY_ROOT" /usr/bin/env -i PATH="/usr/local/sbin:/usr/local/bin:/usr/bin:/usr/sbin:/sbin:/bin" \
+        LC_ALL=C HOME=/root "$@" || rc=$?
+    local d
+    for (( d=${#mounted[@]}-1; d>=0; d-- )); do
+        umount -l "${mounted[d]}" 2>/dev/null || true
+    done
+    if [[ -n "$resolv_bak" && -f "$resolv_bak" ]]; then
+        mv -f "$resolv_bak" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null || true
+    elif [[ -n "$resolv_created" ]]; then
+        rm -f "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null || true
+    fi
+    return $rc
+}
+
+# pacman que escribe: bwrap en nivel 1, chroot en nivel 2 (scriptlets nativos).
+pacman_mut() {
+    level
+    if [[ "$_ARXY_LEVEL" == 2 ]]; then
+        # CheckSpace no resuelve / en chroot (la mtab visible no lo describe,
+        # tipico en containers): config efimera sin ese check. El resto igual.
+        mkdir -p "$ARXY_ROOT/tmp" 2>/dev/null || true
+        rm -f "$ARXY_ROOT"/tmp/pacman-arxy-*.conf 2>/dev/null || true
+        local tmpconf
+        # busybox mktemp exige que la plantilla TERMINE en XXXXXX (.conf no vale).
+        tmpconf="$(mktemp "$ARXY_ROOT/tmp/pacman-arxy.XXXXXX")" || die "no pude crear conf temporal (¿espacio en $ARXY_ROOT/tmp?)"
+        grep -v '^[[:space:]]*CheckSpace' "$ARXY_ROOT/etc/pacman.conf" > "$tmpconf" || die "imagen rota: sin pacman.conf (reinstala con 'sudo $PROG setup')"
+        in_chroot /usr/bin/pacman --config "/tmp/${tmpconf##*/}" "$@"
+        local rc=$?
+        rm -f "$tmpconf" || true
+        return $rc
+    else
+        in_bwrap /usr/bin/pacman "$@"
+    fi
+}
+
+# Si PWD no es visible dentro, entrar via /host (siempre bindeado).
+# En nivel 2 no hay namespace: el PWD del host es directamente valido.
+inside_dir() {
+    [[ "$_ARXY_LEVEL" == 2 ]] && { echo "$PWD"; return 0; }
+    local d
+    for d in $VISIBLE_DIRS /tmp /run /dev /proc /sys; do
+        [[ "$PWD" == "$d" || "$PWD" == "$d"/* ]] && { echo "$PWD"; return 0; }
+    done
+    echo "/host$PWD"
+}
+

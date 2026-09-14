@@ -1,0 +1,36 @@
+# --- dispatch
+[[ $# -ge 1 ]] || { cmd_help; exit 0; }
+cmd="$1"
+shift
+# --help tras el comando: ayuda global. Evita que 'install --help' intente
+# instalar un paquete llamado --help. Ayuda por-comando no existe a proposito
+# (cada mal uso ya imprime su 'uso:' de una linea).
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+    cmd_help
+    exit 0
+fi
+case "$cmd" in
+    install | i | add)          cmd_install "$@" ;;
+    remove | rm | uninstall)    cmd_remove "$@" ;;
+    update | up | upgrade)      cmd_update "$@" ;;
+    clean | clean-cache)        cmd_clean "$@" ;;
+    dedup)                      cmd_dedup "$@" ;;
+    info | show)                cmd_info "$@" ;;
+    list | l | ls | installed)  cmd_list "$@" ;;
+    search | s | find)          cmd_search "$@" ;;
+    search-aur | sa)              cmd_search_aur "$@" ;;
+    __install-file)               cmd_install_file "$@" ;;
+    run | r | exec | x)          cmd_run "$@" ;;
+    which | w)                  cmd_which "$@" ;;
+    shell | sh | enter)         cmd_shell "$@" ;;
+    export)                     cmd_export "$@" ;;
+    unexport)                   cmd_unexport "$@" ;;
+    doctor | check)             cmd_doctor "$@" ;;
+    quickstart | qs | start)    cmd_quickstart "$@" ;;
+    setup | init)               cmd_setup "$@" ;;
+    rollback)                   cmd_rollback "$@" ;;
+    version | -v | --version)   cmd_version "$@" ;;
+    help | -h | --help)         cmd_help "$@" ;;
+    -*)                         die "flag desconocida: $cmd. Prueba: $PROG help" ;;
+    *)                          cmd_run "$cmd" "$@" ;; # atajo: 'arxy firefox'
+esac

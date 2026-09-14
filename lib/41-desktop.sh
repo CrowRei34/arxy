@@ -1,0 +1,120 @@
+pkg_desktops() { # <pkg> -> rutas /usr/share/applications/*.desktop dentro de la imagen
+    # L2: pacman --root prefija cada ruta con $ARXY_ROOT (en L1 salen
+    # peladas): se recorta el prefijo para que el grep vea lo mismo.
+    # ← ciclo 6.5.5 en Void-musl (L2): install/export decia "sin .desktop"
+    # para todo paquete (Alacritty.desktop, org.xfce.mousepad.desktop).
+    local f base
+    while IFS= read -r f; do
+        f="${f#$ARXY_ROOT}"
+        base="${f##*/}"
+        [[ "$f" == "/usr/share/applications/$base" && "$base" == *.desktop ]] && printf '%s\n' "$f"
+    done < <(run_pacman -Qlq "$1" 2>/dev/null || true)
+    return 0
+}
+
+desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
+
+# cmd_export <pkg | archivo.desktop | --all>
+cmd_export() {
+    [[ $# -ge 1 ]] || die "uso: $PROG export <paquete | archivo.desktop | --all>"
+    ensure_image
+    local -a srcs=()
+    if [[ "$1" == "--all" ]]; then
+        mapfile -t srcs < <(find "$ARXY_ROOT/usr/share/applications" -maxdepth 1 -name '*.desktop' 2>/dev/null || true)
+    elif [[ "$1" == *.desktop ]]; then
+        local desk="${1##*/}"
+        if [[ -f "$ARXY_ROOT/usr/share/applications/$desk" ]]; then
+            srcs=("$ARXY_ROOT/usr/share/applications/$desk")
+        elif [[ -f "$1" ]]; then
+            srcs=("$1")
+        else
+            die "no existe: $1"
+        fi
+    else
+        local d
+        while IFS= read -r d; do
+            srcs+=("$ARXY_ROOT$d")
+        done < <(pkg_desktops "$1")
+        [[ "${#srcs[@]}" -gt 0 ]] || { msg "sin .desktop para '$1'"; return 0; }
+    fi
+    local s
+    for s in "${srcs[@]}"; do
+        export_one "$s" "$1"
+    done
+    update_desktop_db
+}
+
+export_one() { # <ruta.desktop del host> <pkg|nombre>
+    local src="$1" pkg="$2" base name exec bin codes icon term cats comment out
+    base="${src##*/}"
+    [[ -f "$src" ]] || return 0
+    name="$(desk_field "$src" Name)"
+    exec="$(desk_field "$src" Exec)"
+    [[ -n "$name" && -n "$exec" ]] || return 0
+    [[ "$(desk_field "$src" NoDisplay)" == "true" ]] && return 0
+    bin="${exec%% *}"
+    bin="${bin#\"}"; bin="${bin%\"}" # Exec="/ruta/con espacios" %F
+    bin="${bin#\'}"; bin="${bin%\'}"
+    if [[ "$bin" != /* ]]; then
+        for cand in "/usr/bin/$bin" "/usr/local/bin/$bin" "/bin/$bin" "/usr/sbin/$bin"; do
+            [[ -x "$ARXY_ROOT$cand" ]] && { bin="$cand"; break; }
+        done
+    fi
+    codes="$(grep -o '%[A-Za-z]' <<<"$exec" | tr '\n' ' ' | sed 's/ *$//' || true)"
+    local new_exec="$PROG run $bin"
+    [[ -n "${codes// /}" ]] && new_exec="$new_exec $codes"
+    icon="$(desk_field "$src" Icon)"
+    if [[ -n "$icon" ]]; then
+        if [[ "$icon" == /* && -f "$ARXY_ROOT$icon" ]]; then
+            icon="$ARXY_ROOT$icon"
+        elif [[ "$icon" != */* ]]; then
+            local found
+            found="$(find "$ARXY_ROOT/usr/share/icons" "$ARXY_ROOT/usr/share/pixmaps" \
+                -name "$icon.*" 2>/dev/null | head -n 1 || true)"
+            [[ -n "$found" ]] && icon="$found"
+        fi
+    fi
+    term="$(desk_field "$src" Terminal)"
+    cats="$(desk_field "$src" Categories)"
+    comment="$(desk_field "$src" Comment)"
+    mkdir -p "$REAL_APPS"
+    out="$REAL_APPS/arxy-$base"
+    {
+        echo "[Desktop Entry]"
+        echo "Name=$name"
+        [[ -n "$comment" ]] && echo "Comment=$comment"
+        echo "Exec=$new_exec"
+        echo "TryExec=$(command -v "$PROG" 2>/dev/null || echo "/usr/bin/$PROG")"
+        [[ -n "$icon" ]] && echo "Icon=$icon"
+        echo "Terminal=${term:-false}"
+        echo "Type=Application"
+        [[ -n "$cats" ]] && echo "Categories=$cats"
+        echo "X-Arxy-Pkg=$pkg"
+    } > "$out"
+    if [[ "$(id -u)" -eq 0 && "$REAL_USER" != "root" ]]; then
+        chown "$REAL_USER" "$out" 2>/dev/null || true
+    fi
+    msg "lanzador: ${out##*/}  ($name)"
+}
+
+cmd_unexport() {
+    [[ $# -ge 1 ]] || die "uso: $PROG unexport <nombre>"
+    local f base="$1"
+    base="${base##*/}"
+    base="${base%.desktop}"
+    f="$REAL_APPS/arxy-$base.desktop"
+    [[ -f "$f" ]] || die "no existe lanzador arxy-$base.desktop"
+    rm -f "$f" && msg "lanzador borrado: arxy-$base.desktop"
+    update_desktop_db
+}
+
+update_desktop_db() {
+    command -v update-desktop-database >/dev/null 2>&1 || return 0
+    [[ -d "$REAL_APPS" ]] || return 0
+    if [[ "$(id -u)" -eq 0 && "$REAL_USER" != "root" ]]; then
+        su -s /bin/sh "$REAL_USER" -c "update-desktop-database \"$REAL_APPS\"" >/dev/null 2>&1 || true
+    else
+        update-desktop-database "$REAL_APPS" >/dev/null 2>&1 || true
+    fi
+}
+

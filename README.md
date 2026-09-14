@@ -119,10 +119,12 @@ Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
 Bash, sin dependencias nuevas. Puerta antes de commit:
 
 ```bash
-bash -n src/arxy install.sh && shellcheck -S warning src/arxy install.sh
+make src/arxy && git diff --exit-code src/arxy   # regenera byte-idéntico (D9)
+bash -n lib/*.sh src/arxy install.sh && shellcheck -S warning src/arxy install.sh
 ```
 
-`src/arxy` y `config/arxy.conf` son canónicos; `packaging/void/arxy/files/`
+`lib/*.sh` son canónicos (`src/arxy` es generado: el instalador lo lee del
+clon); `config/arxy.conf` canónico; `packaging/void/arxy/files/`
 son copias para xbps (el CI verifica que son idénticas). Corre la matrix
 del repo hermano `arxy-image` (`tests/matrix.sh`) antes de commit
 (ver `arxy-image/tests/README.md`).

@@ -11,13 +11,15 @@ y `~/.config/arxy/config`. Precedencia: **env > user-conf > sys-conf**
 ## Puerta antes de commit
 
 ```bash
-bash -n src/arxy install.sh && shellcheck -S warning src/arxy install.sh
+make src/arxy && git diff --exit-code src/arxy   # D9: lib/ genera src/arxy byte-idéntico
+bash -n lib/*.sh src/arxy install.sh && shellcheck -S warning src/arxy install.sh
 cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/void/arxy/files/arxy.conf  # lo verifica lint.yml
 ```
 
 - Un commit por tarea, mensaje con el porqué.
-- `src/arxy` y `config/arxy.conf` son canónicos; `packaging/void/…/files/`
-  son copias manuales para xbps.
+- `lib/*.sh` son canónicos (`src/arxy` es generado y commiteado porque el
+  instalador lo lee del clon); `config/arxy.conf` canónico;
+  `packaging/void/…/files/` son copias manuales para xbps.
 - Matrix con assertions de **contenido** (`grep`), nunca solo rc
   ← Fase 4: bugs mudos con rc=0 (lecturas L2, AUR roto).
 - `pacman` siempre `--noconfirm` vía `nc_args`; nunca `LD_LIBRARY_PATH`
