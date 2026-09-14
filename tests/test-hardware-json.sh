@@ -30,11 +30,14 @@ t() { # t <nombre> -- <cmd...>
 J1='{"format": 1, "level": 1}'
 J2='{"format": 1, "level": 2}'
 
-t "write emite 0644 con contenido" -- sh -c 'write_hardware_json "$0" >/dev/null 2>&1; test "$(cat "$1/hardware.json")" = "$0" && test "$(stat -c %a "$1/hardware.json")" = 644' "$J1" "$D"
-t "write idéntico preserva mtime" -- sh -c 'a=$(stat -c %Y "$0/hardware.json"); sleep 1; write_hardware_json "$1" >/dev/null 2>&1; test "$(stat -c %Y "$0/hardware.json")" = "$a"' "$D" "$J1"
-t "write distinto reescribe" -- sh -c 'write_hardware_json "$1" >/dev/null 2>&1; test "$(cat "$0/hardware.json")" = "$1"' "$D" "$J2"
-t "write sin dir no falla setup" -- sh -c 'ARXY_DATA=/proc/noexiste-falso write_hardware_json "$0" 2>/dev/null; test $? -eq 0' "$J1"
-# ^ sh -c porque ARXY_DATA solo se lee en funciones hijas (export -f no cubre vars)
+t "write emite 0644 con contenido" -- bash -c 'write_hardware_json "$0" >/dev/null 2>&1; test "$(cat "$1/hardware.json")" = "$0" && test "$(stat -c %a "$1/hardware.json")" = 644' "$J1" "$D"
+t "write idéntico preserva mtime" -- bash -c 'a=$(stat -c %Y "$0/hardware.json"); sleep 1; write_hardware_json "$1" >/dev/null 2>&1; test "$(stat -c %Y "$0/hardware.json")" = "$a"' "$D" "$J1"
+t "write distinto reescribe" -- bash -c 'write_hardware_json "$1" >/dev/null 2>&1; test "$(cat "$0/hardware.json")" = "$1"' "$D" "$J2"
+t "write sin dir no falla setup" -- bash -c 'ARXY_DATA=/proc/noexiste-falso write_hardware_json "$0" 2>/dev/null; test $? -eq 0' "$J1"
+# ^ bash -c (NO sh): export -f es de bash; con sh->dash (Debian/este host)
+# el subshell no ve las funciones (rc=127) y los 3 write fallan en falso.
+# En Arch sh->bash y el CI nunca lo vio. ARXY_DATA se pasa por env porque
+# export -f no cubre vars.
 
 # show_* se llama DIRECTO (no en sh -c): tira de media lib/ (emit, probes)
 # y exportar el mundo es frágil; aquí no hace falta aislar env.
