@@ -52,17 +52,6 @@ ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"
 [[ -r "$ARXY_USER_CONF" ]] && . "$ARXY_USER_CONF"
 _restore_frozen
 
-ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
-# version DENTRO del root (Commit 6): nace en el staging y el rename la
-# publica junto a la imagen — nunca hay root nuevo con version vieja ni al
-# reves, y el rollback la rota sola. El env manda (tests la aislan).
-: "${ARXY_VERSION_FILE:=$ARXY_ROOT/var/lib/arxy/version}"
-# Ruta pre-Commit 6 (fuera del root): solo se lee para adoptar una vez y
-# borrar; el codigo nuevo jamas la escribe (una sola verdad).
-: "${ARXY_VERSION_LEGACY:=$ARXY_DATA/version}"
-ARXY_BUILD="$ARXY_DATA/build"              # dir de compilacion AUR (1777)
-NS_BUILD="/arxy-build"                     # misma dir vista desde dentro
-
 ARXY_ARGV=("$@")
 
 # --- usuario real (los .desktop van a SU home aunque se use sudo/doas)
@@ -86,6 +75,22 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
     _restore_frozen
 fi
 unset _frozen_val
+
+# Derivados de ARXY_ROOT en UN solo punto, DESPUES de ambas restauraciones.
+# Antes se derivaba entre el primer _restore_frozen y el source del usuario
+# real: con sudo sin env y ARXY_ROOT en el conf del usuario real, ROOT
+# apuntaba al conf pero DATA/VFILE/BUILD seguian del sys-conf (split-brain:
+# setup extraia en un root y escribia version/level2-rc en otro).
+ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
+# version DENTRO del root (Commit 6): nace en el staging y el rename la
+# publica junto a la imagen — nunca hay root nuevo con version vieja ni al
+# reves, y el rollback la rota sola. El env manda (tests la aislan).
+: "${ARXY_VERSION_FILE:=$ARXY_ROOT/var/lib/arxy/version}"
+# Ruta pre-Commit 6 (fuera del root): solo se lee para adoptar una vez y
+# borrar; el codigo nuevo jamas la escribe (una sola verdad).
+: "${ARXY_VERSION_LEGACY:=$ARXY_DATA/version}"
+ARXY_BUILD="$ARXY_DATA/build"              # dir de compilacion AUR (1777)
+NS_BUILD="/arxy-build"                     # misma dir vista desde dentro
 
 LD_LINUX="$ARXY_ROOT/usr/lib/ld-linux-x86-64.so.2" # interprete ELF del subsistema
 ARXY_LIBPATH="$ARXY_ROOT/usr/lib"
