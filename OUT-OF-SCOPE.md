@@ -78,7 +78,19 @@ El builder añadía la estanza en vez de descomentar (`create-arch-`
 actual trae el duplicado: pacman avisa ("database already
 registered") pero opera. Se normaliza solo en la proxima imagen.
 
-## 12. Tech debt vivo (`ponytail:`)
+## 12. Registro por instancia / `narrowedTo` (diferido, no omitido)
+
+El daemon solo conoce UN token (el suyo, ambiente: todo proceso del
+sandbox lo hereda por env). Un registro auto-servido no confina nada
+con el mismo UID: nada distingue por env a `arxy run` de la app que
+corre dentro, asi que cualquier allowlist "estrechada" seria
+auto-otorgada. La frontera real sigue siendo la allowlist del daemon
+(`--allowed-cmd` al arrancar). Upgrade: credencial padre-fuera-de-banda
+(o techo del registro-raiz contra la allowlist del daemon) + TTL +
+`trap`; solo cuando un consumidor anidado real lo pida (Steam/Proton
+funcionan con el token ambiente, probado e2e en Commit 16).
+
+## 13. Tech debt vivo (`ponytail:`)
 
 `grep -rn 'ponytail:' lib/ tests/` es la lista (ver `AGENTS.md`
 "Tech debt grepeable"). Resumen a fecha de cierre de Fase 4:
