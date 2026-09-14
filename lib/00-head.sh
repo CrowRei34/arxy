@@ -101,12 +101,26 @@ need_cmd() {
     done
 }
 
+# Env ARXY_* ya resuelto -> comandos elevados (sudo VAR= / doas env VAR=).
+# Fuente unica para need_root y as_root: un sudo pelado pierde ARXY_ROOT
+# y opera sobre el rootfs por defecto (instalaciones cruzadas).
+arxy_env_pass() { # imprime VAR=val por linea (valores: rutas/flags, sin \n)
+    # sudo/doas fijan el env en el hijo: sin export basta la asignacion.
+    local v
+    while IFS= read -r v; do
+        [[ "$v" == ARXY_ARGV ]] && continue # array, no escalar
+        printf '%s=%s\n' "$v" "${!v}"
+    done < <(compgen -v | grep '^ARXY_' || true)
+}
+
 # sudo/doas segun lo que traiga el host (Void minimo no trae ninguno por defecto).
 as_root() {
+    local -a pass=()
+    mapfile -t pass < <(arxy_env_pass)
     if command -v sudo >/dev/null 2>&1; then
-        sudo -- "$@"
+        sudo "${pass[@]}" -- "$@"
     else
-        doas "$@"
+        doas env "${pass[@]}" "$@"
     fi
 }
 
@@ -116,11 +130,8 @@ as_root() {
 # (precedencia env > user-conf > sys-conf).
 need_root() {
     [[ "$(id -u)" -eq 0 ]] && return 0
-    local v pass=()
-    while IFS= read -r v; do
-        [[ "$v" == ARXY_ARGV ]] && continue # array, no escalar
-        pass+=("$v=${!v}") # sudo/doas fijan el env en el hijo: sin export
-    done < <(compgen -v | grep '^ARXY_' || true)
+    local -a pass=()
+    mapfile -t pass < <(arxy_env_pass)
     if command -v sudo >/dev/null 2>&1; then
         exec sudo "${pass[@]}" -- "$SELF" "${ARXY_ARGV[@]}"
     elif command -v doas >/dev/null 2>&1; then

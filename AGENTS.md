@@ -76,6 +76,8 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 
 - `ponytail:` en comentarios = atajo deliberado con techo conocido y
   upgrade path. `grep -rn 'ponytail:' lib/ tests/` lista la deuda viva.
+- Límites permanentes: `OUT-OF-SCOPE.md` (vivo: cada `ponytail:` o
+  desviación se registra ahí; si no está, no existe).
 - Mocks GPU (patrón `ARXY_SYS_DRM_PATH`, probativos: sin mock → vacío):
   `ARXY_SYS_ROOT` (reutilizado para `/proc/driver/nvidia` y
   `/sys/module/nvidia`; NO hay `ARXY_NVIDIA_SYSFS_PATH` separado),
@@ -114,7 +116,9 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
    conf presente ← límite estructural Fase 5.
 4. Tras tocar paths/env, mirar **mtimes de `/var/lib/arxy/*`**: los tests
    pasan con estado envenenado ← Fase 6 split-brain (`_restore_frozen`
-   debe correr ANTES de derivar `ARXY_DATA`).
+   debe correr ANTES de derivar `ARXY_DATA`). `ARXY_DATA`/`ARXY_BUILD`
+   derivan de `ARXY_ROOT` (asignacion, no `:=`): para aislar se exporta
+   SOLO `ARXY_ROOT`; exportar los derivados se ignora en silencio.
 5. Con `pipefail`, `prod | grep -q` miente (SIGPIPE 141): capturar en
    variable y grepear después. Presencia = `test -x`, nunca `--version`
    (`dbus-send --version` da rc=1 siempre) ← `test-hardware.sh`.

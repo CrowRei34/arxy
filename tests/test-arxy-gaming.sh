@@ -31,7 +31,8 @@ update_desktop_db() { return 0; }
 do_dedup() { return 0; }
 
 # Fixtures de GPU.
-mkdir -p "$D/empty" "$D/dri/dri"
+mkdir -p "$D/empty" "$D/dri/dri" "$D/musllib" "$D/musllib64"
+touch "$D/musllib/ld-musl-x86_64.so.1"
 mkdir -p "$D/drmA/card0/device" "$D/drmN/card0/device"
 printf '0x1002' > "$D/drmA/card0/device/vendor"
 printf '0x10de' > "$D/drmN/card0/device/vendor"
@@ -79,6 +80,16 @@ echo "== T7: conflicto mesa-mini avisado (al final: redefine is_mesa_mini)"
 is_mesa_mini() { return 0; }
 out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming --dry-run 2>&1)"
 grep -q "mesa-mini seria reemplazado" <<<"$out" && ok "T7 conflicto" || no "T7 conflicto"
+
+echo "== T9: orden AUR-antes-de-elevar (makepkg prohibe root)"
+out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"
+aline="$(grep -n "^AUR " <<<"$out" | head -1 | cut -d: -f1)"
+pline="$(grep -n "PACMAN_MUT" <<<"$out" | head -1 | cut -d: -f1)"
+[[ -n "$aline" && -n "$pline" && "$aline" -lt "$pline" ]] && ok "T9 AUR antes que oficial" || no "T9 AUR antes que oficial"
+
+echo "== T10: musl dry-run lista igual + avisa devices"
+out="$(ARXY_LIB_DIR="$D/musllib" ARXY_LIB64_DIR="$D/musllib64" ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming --dry-run 2>&1)"
+grep -q "vulkan-radeon" <<<"$out" && grep -q "solo devices del host" <<<"$out" && ok "T10 musl" || no "T10 musl"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

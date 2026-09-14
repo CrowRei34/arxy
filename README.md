@@ -67,6 +67,7 @@ re-ejecuta con `sudo`.
   lo exige).
 - **Sin sandbox de seguridad**: ni L1 (cero aislamiento) ni L2. Es
   compat-glibc, no aislamiento: no ejecutes software no confiable.
+- Límites permanentes y deuda viva: ver `OUT-OF-SCOPE.md`.
 - Necesitan demonios root/systemd y **no** van dentro: TeamViewer,
   AnyDesk. `protonvpn-app` choca con el ProtonVPN del host (misma app
   single-instance en el bus compartido). Steam/umu-launcher sí van

@@ -65,11 +65,14 @@ arxy_gaming_pkgs() { # <vendor> : un paquete por linea (gaming completo)
     return 0
 }
 
-cmd_gaming() { # [--dry-run] : gaming completo para la GPU del host
-    local dry=""
-    [[ "${1:-}" == "--dry-run" ]] && dry=1
+cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
+    local dry="" force=""
+    [[ "${1:-}" == "--dry-run" ]] && { dry=1; shift; }
+    force="${1:-}"
     local vendor
-    if ! vendor="$(arxy_gaming_vendor)"; then
+    if [[ -n "$force" ]]; then
+        vendor="$force"
+    elif ! vendor="$(arxy_gaming_vendor)"; then
         [[ "$(detect_gpu || true)" == nvidia ]] && \
             die "NVIDIA sin driver propietario (¿nouveau?): arxy-gaming exige el modulo propietario"
         die "GPU no detectada (sin drm/dri): instala a mano, p. ej. '$PROG install --aur arxy-gaming-intel'"
@@ -78,6 +81,7 @@ cmd_gaming() { # [--dry-run] : gaming completo para la GPU del host
     mapfile -t pkgs < <(arxy_gaming_pkgs "$vendor")
     if [[ -n "$dry" ]]; then
         echo "vendor detectado: $vendor"
+        [[ "$(detect_libc 2>/dev/null || true)" == musl ]] && echo "host musl: solo devices del host, userspace del rootfs"
         echo "meta-paquete: arxy-gaming -> arxy-gaming-$vendor (draft en packaging/aur/, aun no publicado)"
         echo "paquetes (instalaria):"
         printf '  %s\n' "${pkgs[@]}"
@@ -85,15 +89,31 @@ cmd_gaming() { # [--dry-run] : gaming completo para la GPU del host
         echo "nada tocado (dry-run)"
         return 0
     fi
+    local -a off=() aur=() p
+    for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
+    # makepkg prohibe root: la parte AUR se compila como usuario ANTES de
+    # elevar (tras need_root ya es tarde). Con ARXY_GAMING_AUR_DONE la
+    # re-ejecucion elevada la salta. Root-directo sin usuario que la haga:
+    # se instala lo oficial y se dice como completar (mismo limite que
+    # 'install --aur' con sudo: nunca funciono).
+    if [[ "${#aur[@]}" -gt 0 && -z "${ARXY_GAMING_AUR_DONE:-}" ]]; then
+        if [[ "$(id -u)" -ne 0 ]]; then
+            cmd_install --aur "${aur[@]}"
+            export ARXY_GAMING_AUR_DONE=1
+        fi
+    fi
     need_root
     ensure_image
     # [multilib] para lib32-* (idempotente; mismo idioma sed que el hold).
-    sed -i -E '/^#\[multilib\]/,/^#?Include/s/^#//' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null || true
+    # Guard primero: imagenes frescas ya traen una estanza activa (el
+    # builder la añade); sin guard duplicariamos el registro.
+    grep -q '^\[multilib\]' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null || \
+        sed -i -E '/^#\[multilib\]/,/^#?Include/s/^#//' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null || true
     cmd_gpu_stack "arxy-gaming-$vendor" # mesa full idempotente (amd/intel/nvidia)
-    local -a off=() aur=() p
-    for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
     [[ "${#off[@]}" -gt 0 ]] && cmd_install "${off[@]}"
-    [[ "${#aur[@]}" -gt 0 ]] && cmd_install --aur "${aur[@]}"
+    if [[ "${#aur[@]}" -gt 0 && -z "${ARXY_GAMING_AUR_DONE:-}" ]]; then
+        die "parte AUR pendiente como root (makepkg prohibe root): completala como usuario: $PROG install --aur ${aur[*]}"
+    fi
     msg "gaming listo: $vendor (arxy-gaming-$vendor)"
 }
 
@@ -102,16 +122,20 @@ cmd_install() {
     # --dry-run informe sin root (como doctor --fix). El resto de args
     # sigue su curso normal tras el gaming (o se ignora en dry-run).
     local -a _rest=()
-    local _g _dry="" _want=""
+    local _g _dry="" _want="" _branch=""
     for _g in ${1+"$@"}; do
         case "$_g" in
             arxy-gaming) _want=1 ;;
+            arxy-gaming-nvidia|arxy-gaming-amd|arxy-gaming-intel) _want=1; _branch="${_g##*-}" ;;
             --dry-run) _dry=1 ;;
             *) _rest+=("$_g") ;;
         esac
     done
     if [[ -n "$_want" ]]; then
-        if [[ -n "$_dry" ]]; then cmd_gaming --dry-run; else cmd_gaming; fi
+        local -a _gargs=()
+        [[ -n "$_dry" ]] && _gargs+=(--dry-run)
+        [[ -n "$_branch" ]] && _gargs+=("$_branch")
+        cmd_gaming "${_gargs[@]+"${_gargs[@]}"}"
         local _rc=$?
         [[ -n "$_dry" || "${#_rest[@]}" -eq 0 ]] && return $_rc
         set -- "${_rest[@]}"
@@ -312,6 +336,25 @@ done
 exec /usr/bin/cp "$@"
 SHIM
     chmod +x "$work_host/bin/bsdtar" "$work_host/bin/tar" "$work_host/bin/cp"
+    # Idem para install: 'install -o root -g root' (tipico en package() de
+    # los -bin) intenta chown bajo fakeroot/userns (EINVAL fatal). Se pelan
+    # -o/-g/--owner/--group en cualquier posicion; el resto intacto.
+    cat > "$work_host/bin/install" <<'SHIM'
+#!/bin/sh
+# Filtro con centinela (rotar sin recentinela reordena/duplica).
+sent="__shim_end_$$"
+set -- "$@" "$sent"
+while [ $# -gt 0 ] && [ "$1" != "$sent" ]; do
+    case "$1" in
+        -o|-g|--owner|--group) shift; { shift; } 2>/dev/null ;;
+        -o?*|-g?*|--owner=*|--group=*) shift ;;
+        *) set -- "$@" "$1"; shift ;;
+    esac
+done
+[ "$1" = "$sent" ] && shift
+exec /usr/bin/install "$@"
+SHIM
+    chmod +x "$work_host/bin/install"
     local build_ok=0
     # Sin --skippgpcheck si el usuario lo pide (por defecto se omite: los
     # keyservers caidos rompen builds que por lo demas estan bien).
