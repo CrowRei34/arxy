@@ -410,7 +410,10 @@ in_chroot() {
             [[ -e "$ARXY_ROOT/etc/resolv.conf" ]] || resolv_created=1
             resolv_bak="$ARXY_ROOT/etc/resolv.conf.arxy-bak"
             cp -a "$ARXY_ROOT/etc/resolv.conf" "$resolv_bak" 2>/dev/null || true
-            cp -L "$real_resolv" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null || true
+            # Sin aviso el chroot queda sin DNS y pacman falla con error de
+            # red confuso (M5: la causa raiz quedaba oculta).
+            cp -L "$real_resolv" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null \
+                || msg "aviso: DNS del host no disponible en chroot (fallo bind+copia de resolv.conf)" >&2
         fi
     fi
     if [[ -d "$ARXY_BUILD" ]]; then
