@@ -2770,7 +2770,19 @@ cmd_host_bridge() { # [--daemon|--stop|--status] [--socket P] [--allowed-cmd B..
             echo "inactivo (buscado en $sock)"; return 1 ;;
         --stop)
             if bridge_pid_alive "$pidf"; then
+                # TERM puede tardar (drena colas); esperar evita borrar el
+                # pidfile con vivo dentro (M7: el --daemon siguiente
+                # duplicaba instancia). Sin muerte: KILL; si ni asi,
+                # no mentir "detenido".
                 kill "$(cat "$pidf")" 2>/dev/null || true
+                local _i=0
+                while [[ $_i -lt 50 ]] && bridge_pid_alive "$pidf"; do sleep 0.1; _i=$((_i+1)); done
+                if bridge_pid_alive "$pidf"; then
+                    kill -9 "$(cat "$pidf")" 2>/dev/null || true
+                    _i=0
+                    while [[ $_i -lt 50 ]] && bridge_pid_alive "$pidf"; do sleep 0.1; _i=$((_i+1)); done
+                fi
+                bridge_pid_alive "$pidf" && die "no pude detener el daemon (sigue vivo)"
                 rm -f "$pidf" "${pidf}.lock"
                 echo "detenido"
             else

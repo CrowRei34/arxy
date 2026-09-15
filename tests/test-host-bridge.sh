@@ -173,5 +173,14 @@ grep -q 'arxy-bridge-$(id -u).sock' "$HERE/../lib/80-bridge.sh" && echo "PASS: T
 if grep -rq 'arxy-bridge-${UID}' "$HERE/../lib" 2>/dev/null; then echo "FAIL: T22 grafia divergente"; FAIL=$((FAIL+1));
 else echo "PASS: T22 sin grafia divergente"; fi
 
+echo "== T23: stop mata al que ignora TERM (M7) =="
+cp "$(command -v sleep)" "$D/arxy-bridged"
+( trap '' TERM; exec -a arxy-bridged "$D/arxy-bridged" 120 ) &
+_kpid=$!
+echo "$_kpid" > "$D/k.pid"
+out23="$("$BIN" host-bridge --stop --socket "$D/k.sock" 2>&1)"; rc23=$?
+kill -9 "$_kpid" 2>/dev/null || true
+[[ $rc23 -eq 0 ]] && grep -q "detenido" <<<"$out23" && ! kill -0 "$_kpid" 2>/dev/null && [[ ! -e "$D/k.pid" ]] && echo "PASS: T23 stop mata" || { echo "FAIL: T23 stop mata (rc=$rc23 $out23)"; FAIL=$((FAIL+1)); }
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
