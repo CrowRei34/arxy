@@ -68,8 +68,16 @@ provoca crashes GL. Fijar el mirror o esperar al repo.
 ## 10. Hardware no probado
 
 Verificado real: Intel (HD 630: GL + EGL tras
-`install arxy-gaming`; Commit 13). AMD y NVIDIA reales: solo mocks
+`install arxy-gaming`; Commit 13; re-verificado en v0.5.0 con Iris en
+este host). AMD y NVIDIA reales: solo mocks
 (lógica cubierta en `test-gpu-drm.sh`, montajes sin probar en HW).
+
+Sin acceso a ese HW (2026-09-15, solo Intel disponible): si tienes
+AMD/NVIDIA, reporta con `arxy doctor --json` + `arxy run eglinfo -B` +
+`arxy run glxinfo -B` + `arxy run vulkaninfo --summary`.
+Upgrade: verificar en HW real cuando haya acceso; si falla, fix de
+Fase 4 en commit con mensaje ampliado. Decisión v0.5.0: 6b fuera
+(§14), 7b diferido hasta usuario real (§15).
 
 ## 11. Tarball vigente con `[multilib]` duplicado
 
