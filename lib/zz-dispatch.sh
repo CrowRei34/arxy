@@ -26,6 +26,7 @@ case "$cmd" in
     shell | sh | enter)         cmd_shell "$@" ;;
     export)                     cmd_export "$@" ;;
     unexport)                   cmd_unexport "$@" ;;
+    desktop)                    cmd_desktop "$@" ;;
     doctor | check)             cmd_doctor "$@" ;;
     quickstart | qs | start)    cmd_quickstart "$@" ;;
     setup | init)               cmd_setup "$@" ;;

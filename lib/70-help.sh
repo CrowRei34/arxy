@@ -24,6 +24,7 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
+  desktop --migrate    migrar lanzadores legacy sin X-Arxy-Pkg (idempotente)
   doctor [--fix [--apply]|--json]  verifica (fix informa; --apply root)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)

@@ -93,6 +93,9 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   `ARXY_BRIDGE_SOCKET`/`ARXY_BRIDGE_TOKEN` + allowlist del daemon
   (e2e: T0/T16/T19 en `test-bridge-in-container.sh`); `xdg-open` cubre
   `gio` (sin caso real no se añade).
+- `desktop --migrate` etiqueta `.desktop` legacy sin `X-Arxy-Pkg`
+  (idempotente; auto tras install/update con aviso a stderr)
+  ← Fase 6a: un solo formato desde 0.2.0, hoy casi siempre no-op.
 - `LD_LIBRARY_PATH` no se scrubbea en L1 a proposito (blast radius
   mayor que `VK_*`; sin caso real que lo pida no se toca).
 

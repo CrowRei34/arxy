@@ -168,6 +168,9 @@ cmd_install() {
         cmd_export "$p" || true
     done
     update_desktop_db
+    # Legacy sin tag que export_one no toco (pre-X-Arxy-Pkg): aviso a
+    # stderr, nunca falla el install.
+    desktop_migrate_auto || true
     [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
     msg "instalado: $*"
 }
@@ -403,6 +406,7 @@ cmd_install_file() {
     name="$(in_sys /usr/bin/pacman -Qp "$file" 2>/dev/null | awk '{print $1}')"
     [[ -n "${name:-}" ]] && { cmd_export "$name" || true; }
     update_desktop_db
+    desktop_migrate_auto || true
 }
 
 cmd_remove() {
@@ -429,6 +433,7 @@ cmd_update() {
     nc_args nc
     pacman_mut -Syu "${nc[@]}" || die "pacman fallo"
     clean_pkg_cache
+    desktop_migrate_auto || true
     [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto
     return 0 # [[...]] && ... final daria rc=1 con el hook desactivado
 }

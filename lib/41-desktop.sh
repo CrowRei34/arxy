@@ -97,6 +97,62 @@ export_one() { # <ruta.desktop del host> <pkg|nombre>
     msg "lanzador: ${out##*/}  ($name)"
 }
 
+_desktop_infer_pkg() { # <ruta arxy-*.desktop> -> imprime el pkg inferido
+    local base="${1##*/}"
+    base="${base#arxy-}"
+    base="${base%.desktop}"
+    # Multi-desktop (p. ej. xterm trae xterm+uxterm con X-Arxy-Pkg=xterm):
+    # el nombre solo aproxima; el proximo install/export lo corrige.
+    [[ -n "$base" ]] || base="unknown"
+    printf '%s' "$base"
+}
+
+_desktop_tag_missing() { # <ruta> -> imprime pkg si migro; rc 1 si ya tenia tag
+    local f="$1" pkg
+    grep -q '^X-Arxy-Pkg=' "$f" 2>/dev/null && return 1
+    pkg="$(_desktop_infer_pkg "$f")"
+    [[ -n "$(tail -c 1 "$f" 2>/dev/null)" ]] && printf '\n' >>"$f"
+    printf 'X-Arxy-Pkg=%s\n' "$pkg" >>"$f"
+    printf '%s' "$pkg"
+    return 0
+}
+
+cmd_desktop_migrate() { # etiqueta legacy sin X-Arxy-Pkg (idempotente)
+    local f n=0 s=0 pkg
+    shopt -s nullglob
+    for f in "$REAL_APPS"/arxy-*.desktop; do
+        if pkg="$(_desktop_tag_missing "$f")"; then
+            msg "migrate: ${f##*/} -> X-Arxy-Pkg=$pkg"
+            n=$((n + 1))
+        else
+            s=$((s + 1))
+        fi
+    done
+    shopt -u nullglob
+    msg "migrate: $n migrados, $s ya al día"
+}
+
+desktop_migrate_auto() { # tras install/update: aviso a stderr, nunca falla
+    # Solo añade el tag (no toca Name/Exec): no requiere update-desktop-database.
+    local f n=0
+    shopt -s nullglob
+    for f in "$REAL_APPS"/arxy-*.desktop; do
+        _desktop_tag_missing "$f" >/dev/null && n=$((n + 1)) || true
+    done
+    shopt -u nullglob
+    if ((n > 0)); then
+        printf 'arxy: aviso: %d lanzadores legacy migrados (X-Arxy-Pkg)\n' "$n" >&2
+    fi
+    return 0
+}
+
+cmd_desktop() { # desktop --migrate
+    case "${1:-}" in
+        --migrate) cmd_desktop_migrate ;;
+        *) die "uso: $PROG desktop --migrate" ;;
+    esac
+}
+
 cmd_unexport() {
     [[ $# -ge 1 ]] || die "uso: $PROG unexport <nombre>"
     local f base="$1"
