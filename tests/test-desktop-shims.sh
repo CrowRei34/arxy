@@ -11,6 +11,16 @@ REPO="$HERE/.."
 ok() { echo "PASS: $1"; }
 no() { echo "FAIL: $1${2:+ (tengo '$2')}"; FAIL=$((FAIL+1)); }
 
+# M11: anclaje estructural (no textual): la allowlist funcional es la
+# que emite bridge_default_allowlist (la que alimenta al daemon).
+# shellcheck source=../lib/00-head.sh
+. "$HERE/../lib/00-head.sh" >/dev/null 2>&1
+# shellcheck source=../lib/80-bridge.sh
+. "$HERE/../lib/80-bridge.sh" >/dev/null 2>&1
+_allow="$(bridge_default_allowlist)"
+grep -qx 'xdg-open' <<<"$_allow" && ok "allowlist funcional trae xdg-open" || no "allowlist funcional trae xdg-open" "$_allow"
+grep -qx 'notify-send' <<<"$_allow" && ok "allowlist funcional trae notify-send" || no "allowlist funcional trae notify-send" "$_allow"
+
 grep -q 'xdg-open' "$REPO/lib/80-bridge.sh" && ok "allowlist trae xdg-open" || no "allowlist trae xdg-open"
 grep -q 'notify-send' "$REPO/lib/80-bridge.sh" && ok "allowlist trae notify-send" || no "allowlist trae notify-send"
 [[ "$(grep -l 'xdg-open' "$REPO"/lib/*.sh)" == "$REPO/lib/80-bridge.sh" ]] \
@@ -25,7 +35,9 @@ fi
 grep -q 'ARXY_BRIDGE_SOCKET' "$REPO/lib/10-level.sh" && ok "run_in expone SOCKET" || no "run_in expone SOCKET"
 grep -q 'ARXY_BRIDGE_TOKEN' "$REPO/lib/10-level.sh" && ok "run_in expone TOKEN" || no "run_in expone TOKEN"
 for _t in T0 T16 T19; do
-    if grep -q "\"$_t" "$REPO/tests/test-bridge-in-container.sh"; then ok "e2e cubre $_t"; else no "e2e cubre $_t"; fi
+    # M11: en linea de codigo, no en comentario (mencion en comentario no es cobertura).
+    if grep -n "\"$_t" "$REPO/tests/test-bridge-in-container.sh" | grep -qv '^[0-9]*:#'; then ok "e2e cubre $_t";
+    else no "e2e cubre $_t"; fi
 done
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
