@@ -107,6 +107,18 @@ elif mode == 'raw':
             print('INVALID:%d' % f[1])
         else:
             print('RESP:' + json.dumps(f[1]))
+elif mode == 'io':
+    # request + input + close-input (M19): ejercita 524/549 del C.
+    send_frame(s, {"type":"request","command":json.loads(sys.argv[3])})
+    send_frame(s, {"type":"input","data":base64.b64encode(sys.argv[4].encode()).decode()})
+    send_frame(s, {"type":"close-input"})
+    drain(s)
+elif mode == 'rsz':
+    # request tty + resize (M19): ejercita openpty/winsize + 551 del C.
+    # Sin stty no se verifica el tamano, solo que la sesion tty vive.
+    send_frame(s, {"type":"request","command":json.loads(sys.argv[3]),"tty":True,"width":80,"height":24})
+    send_frame(s, {"type":"resize","width":111,"height":222})
+    drain(s)
 elif mode == 'flood':
     # hijo que nunca lee stdin + frames input hasta topar la cola (4 MiB):
     # el daemon debe responder 'input too large', no cortar en seco (A4).
@@ -366,6 +378,22 @@ if test "${out%%$'\n'*}" = "$exp_out"; then
     pass "daemon vivo tras flood"
 else
     fail "flood-liveness: esperado [$exp_out], obtenido [$out]"
+fi
+# --- 21. rutas interactivas: input/close-input + tty/resize (M19) ---
+out="$(python3 "$TMPD/bc.py" io "$SOCK" '["/bin/sh","-c","exec cat"]' 'hola-pty-456')"
+exp_out="OUT:$(printf 'hola-pty-456' | base64)"
+if test "${out%%$'\n'*}" = "$exp_out"; then
+    pass "input+close-input hacen eco"
+else
+    fail "io: esperado [$exp_out], obtenido [$out]"
+fi
+case "$out" in *EXIT:0*) pass "input+close-input exit 0";; *) fail "io exit: [$out]";; esac
+out="$(python3 "$TMPD/bc.py" rsz "$SOCK" '["/bin/echo","rsz-ok"]')"
+exp_out="OUT:$(printf 'rsz-ok\r\n' | base64)"
+if test "${out%%$'\n'*}" = "$exp_out"; then
+    pass "sesion tty vive tras resize"
+else
+    fail "rsz: esperado [$exp_out], obtenido [$out]"
 fi
 # tripwire estatico: el free antes de 'goto done' debe anular el puntero
 # (musl no aborta en double-free: el flood solo no discriminaria; este
