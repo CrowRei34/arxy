@@ -2,7 +2,7 @@
 
 ## [0.5.0] - 2026-09-15
 
-Desde v0.4.0: Fase 6a, Fase 7 y cierre de auditoría.
+Desde v0.2.1: Fase 6a, Fase 7 y cierre de auditoría.
 
 ### Añadido
 
