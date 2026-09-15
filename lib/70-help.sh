@@ -28,11 +28,11 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   doctor [--fix [--apply]|--json]  verifica (fix informa; --apply root)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
-  rollback             restaura la imagen anterior a un setup
+  rollback             restaura el setup inmediato anterior (1 sola generacion)
   version [--verbose]  version CLI+imagen (verbose: nivel/GPU/tamaño/hold)
   help                 esta ayuda
 
-Atajos: i, r, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
+Atajos: i add, rm uninstall, up upgrade, clean-cache, show, l ls installed, s find, sa, r exec x, w, sh enter, check, qs start, init, -v --version, -h --help. Si el comando no existe, se interpreta como 'run':
   $PROG firefox   ==   $PROG run firefox
 
 Ejemplos:

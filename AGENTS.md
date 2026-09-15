@@ -134,7 +134,7 @@ asserta cada check). El CI la corre en cada build; manual pre-release:
 docker cp <tarball> <c>:/image.tar.zst
 docker cp src/arxy <c>:/usr/local/bin/arxy
 docker cp <arxy-image>/tests/matrix.sh <c>:/matrix.sh
-docker exec <c> /matrix.sh   # root directo; en host con sudo: sudo -E
+docker exec <c> /matrix.sh   # root directo; en host con sudo: sudo -E env "PATH=<staging>/bin:..." (forma completa: secure_path impone si no el instalado obsoleto)
 ```
 
 Vars: `MATRIX_IMAGE`, `ARXY_ROOT` (aislar rootfs), `MATRIX_WRITE2=1`
@@ -232,8 +232,9 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - Fase 5 no integra el bridge sin resolver antes sus 4 bloqueantes
   (lista en el header de `bridge/arxy-bridged.c`).
 - `doctor --json` lleva `"format": 1` desde el día 1; añadir campos es
-  compatible, renombrar/quitar exige `format: 2`. Schema exacto: comentario
-  en `lib/60-hw.sh` (única fuente, sin `.md` que derive).
+  compatible, renombrar/quitar exige `format: 2`. Schema mínimo: comentario
+  en `lib/60-hw.sh` (única fuente, sin `.md` que derive; las claves
+  `*_method`/`fixes`/`signature` son aditivas y no están listadas).
 - `reason`/`would_do` del JSON en español (idioma del repo; el bash es
   español salvo etiquetas de informe heredadas —`fixes available:`,
   `[hecho]/[fallo]`— y el bridge C, que informa en inglés).

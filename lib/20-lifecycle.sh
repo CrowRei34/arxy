@@ -207,6 +207,8 @@ cmd_setup() {
     tmp="$(mktemp "$ARXY_DATA/.image.partial.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sig_tmp="$(mktemp "$ARXY_DATA/.arxy-sig.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    # Q2-H8: este trap EXIT no guarda/restaura el del llamador a proposito
+    # (cmd_setup es toplevel/subshell: no hay trap previo que preservar).
     # shellcheck disable=SC2064
     trap "rm -f '$tmp' '$sha_tmp' '$sig_tmp'" EXIT
     msg "descargando imagen..."
@@ -387,6 +389,9 @@ cmd_rollback() {
     # version viaja DENTRO del root (Commit 6): el swap la rota sola, sin
     # copias. Si el root restaurado es pre-Commit 6 (sin version dentro),
     # ensure_version la regenera en el proximo uso.
+    # Q4-H3: la atestacion .arxy-sig describe la generacion instalada por
+    # setup; tras rotar, invalidar (ausente = no verificado, nunca rancio).
+    rm -f "$ARXY_DATA/.arxy-sig"
     msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
 }
 

@@ -716,6 +716,8 @@ cmd_setup() {
     tmp="$(mktemp "$ARXY_DATA/.image.partial.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sig_tmp="$(mktemp "$ARXY_DATA/.arxy-sig.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    # Q2-H8: este trap EXIT no guarda/restaura el del llamador a proposito
+    # (cmd_setup es toplevel/subshell: no hay trap previo que preservar).
     # shellcheck disable=SC2064
     trap "rm -f '$tmp' '$sha_tmp' '$sig_tmp'" EXIT
     msg "descargando imagen..."
@@ -896,6 +898,9 @@ cmd_rollback() {
     # version viaja DENTRO del root (Commit 6): el swap la rota sola, sin
     # copias. Si el root restaurado es pre-Commit 6 (sin version dentro),
     # ensure_version la regenera en el proximo uso.
+    # Q4-H3: la atestacion .arxy-sig describe la generacion instalada por
+    # setup; tras rotar, invalidar (ausente = no verificado, nunca rancio).
+    rm -f "$ARXY_DATA/.arxy-sig"
     msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
 }
 
@@ -2741,11 +2746,11 @@ Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
   doctor [--fix [--apply]|--json]  verifica (fix informa; --apply root)
   quickstart|qs        dice tu siguiente paso segun estado (para empezar)
   setup                (re)descarga e instala la imagen (atomico, con rollback)
-  rollback             restaura la imagen anterior a un setup
+  rollback             restaura el setup inmediato anterior (1 sola generacion)
   version [--verbose]  version CLI+imagen (verbose: nivel/GPU/tamaño/hold)
   help                 esta ayuda
 
-Atajos: i, r, rm, up, l, s. Si el comando no existe, se interpreta como 'run':
+Atajos: i add, rm uninstall, up upgrade, clean-cache, show, l ls installed, s find, sa, r exec x, w, sh enter, check, qs start, init, -v --version, -h --help. Si el comando no existe, se interpreta como 'run':
   $PROG firefox   ==   $PROG run firefox
 
 Ejemplos:

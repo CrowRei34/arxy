@@ -151,5 +151,14 @@ ensure_image >/dev/null 2>&1
 ls -d "$R".old.tmp.* >/dev/null 2>&1 && no "T6 tmp resuelto" || ok "T6 tmp resuelto"
 [[ ! -e "$D/version" ]] && ok "T6 sin legacy fuera" || no "T6 sin legacy fuera"
 
+echo "== T7: rollback invalida .arxy-sig rancia (Q4-H3)"
+rm -rf "$D/root" "$D/root.old" "$D"/root.new.* "$D"/root.old.tmp.* "$D"/.image.partial.* "$D/version"
+mkroot "$R"; echo nuevo > "$R/.mark"
+mkroot "$R.old"; echo viejo > "$R.old/.mark"
+printf '1' > "$D/.arxy-sig"
+cmd_rollback >/dev/null 2>&1
+[[ "$(cat "$R/.mark" 2>/dev/null)" == viejo ]] && ok "T7 rolo a .old" || no "T7 rolo"
+[[ ! -e "$D/.arxy-sig" ]] && ok "T7 sig invalidada" || no "T7 sig rancia sigue"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

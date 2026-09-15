@@ -37,6 +37,9 @@ mkdir -p "$D/musllib" "$D/musllib64" && touch "$D/musllib/ld-musl-x86_64.so.1"
 t "libc mock musl" "musl" -- bash -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" detect_libc'
 mkdir -p "$D/empty"
 t "libc mock unknown" "unknown" -- bash -c 'PATH=/nonexistent ARXY_LIB_DIR="'"$D"'/empty" ARXY_LIB64_DIR="'"$D"'/empty" detect_libc'
+# Q1-H3: faltaba la rama glibc-pura (la suite mentia en verde en musl).
+mkdir -p "$D/glibclib" "$D/glibclib64" && touch "$D/glibclib64/ld-linux-x86-64.so.2"
+t "libc mock glibc pura" "glibc" -- bash -c 'ARXY_LIB_DIR="'"$D"'/glibclib" ARXY_LIB64_DIR="'"$D"'/glibclib64" detect_libc'
 # Ambos loaders: arbitra ldd (el primario). En glibc+musl-pkg -> glibc;
 # sin ldd no hay primario visible -> unknown (sin prioridad falsa).
 mkdir -p "$D/duallib" "$D/duallib64"
