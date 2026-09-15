@@ -117,5 +117,13 @@ for _f13 in "$HERE/../lib/50-run.sh" "$HERE/../lib/41-desktop.sh"; do
 done
 [[ $ord13 -eq 1 ]] && ok "T13 orden /usr/bin primero" || no "T13 orden"
 
+echo "== T14: install/remove validan nombres antes de root/red (Q6-H9/H11/H13)"
+out="$(cmd_install "" 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ! grep -q "PACMAN_MUT" <<<"$out" && ok "T14 install vacio muere pre-red" || no "T14 install vacio ($rc: $out)"
+out="$(cmd_install "my app" 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T14 install con espacio muere claro" || no "T14 install espacio ($rc: $out)"
+out="$(cmd_remove "" 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T14 remove vacio muere claro" || no "T14 remove vacio ($rc: $out)"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

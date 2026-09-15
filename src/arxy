@@ -77,6 +77,13 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
 fi
 unset _frozen_val
 
+# Q6-H9: vacio no es "unset" (:- los confunde y DATA/BUILD/VFILE caerian
+# a rutas reales creyendo aislar). Tras ambos restores, vacio muere claro
+# (die aun no existe aqui: echo+exit con el mismo prefijo).
+if [[ -z "${ARXY_ROOT:-}" ]]; then
+    echo "arxy: error: ARXY_ROOT vacio (unset para usar el default)" >&2
+    exit 1
+fi
 # Derivados de ARXY_ROOT en UN solo punto, DESPUES de ambas restauraciones.
 # Antes se derivaba entre el primer _restore_frozen y el source del usuario
 # real: con sudo sin env y ARXY_ROOT en el conf del usuario real, ROOT
@@ -1119,17 +1126,23 @@ cmd_install() {
     fi
     need_root
     [[ $# -ge 1 ]] || die "uso: $PROG install <paquete...>  |  $PROG install --aur <paquete...>"
-    ensure_image
-    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
-    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
-    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    # Q6-H9/H11/H13: validar TODO el argv ANTES de root/red. Un "" o "my app"
+    # moria en pacman tras escalar y descargar (~130MB). gpu-amd|gpu-nvidia
+    # son virtuales fijos (siempre validos); el resto pasa check_pkg_name.
     local -a pkgs=()
+    local -a gpu_reqs=()
     local g
     for g in "$@"; do
         [[ "$g" == --dry-run ]] && die "--dry-run solo vale con arxy-gaming ('$PROG install arxy-gaming --dry-run')"
         [[ "$g" == -* ]] && die "opcion no soportada en install: '$g'"
-        case "$g" in gpu-amd|gpu-nvidia) cmd_gpu_stack "$g" ;; *) pkgs+=("$g") ;; esac
+        case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
+    ensure_image
+    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
+    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
+    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    local _gr
+    for _gr in ${gpu_reqs[@]+"${gpu_reqs[@]}"}; do cmd_gpu_stack "$_gr"; done
     [[ "${#pkgs[@]}" -gt 0 ]] || return 0
     local -a nc
     nc_args nc
@@ -1395,12 +1408,16 @@ cmd_install_file() {
 }
 
 cmd_remove() {
-    need_root
     [[ $# -ge 1 ]] || die "uso: $PROG remove <paquete...>"
+    # Q6-H9/H11: validar antes de root/red (igual que install).
+    local _r
+    for _r in "$@"; do
+        [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"
+        check_pkg_name "$_r"
+    done
+    need_root
     ensure_image
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
-    local _r
-    for _r in "$@"; do [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"; done
     local -a nc
     nc_args nc
     pacman_mut -Rns "${nc[@]}" "$@" || die "pacman fallo"
@@ -1727,9 +1744,13 @@ desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
 # cmd_export <pkg | archivo.desktop | --all>
 cmd_export() {
     [[ $# -ge 1 ]] || die "uso: $PROG export <paquete | archivo.desktop | --all>"
-    ensure_image
     # Sin flags a run_pacman (P6-H2: -Qlq pasaria la opcion a pacman).
     [[ "$1" == -* && "$1" != --all ]] && die "opcion no soportada en export: '$1'"
+    # Q6-H11: el nombre de paquete se valida ANTES de ensure_image (un "a b"
+    # moria en pacman tras descargar; un "" daba "sin .desktop" rc 0).
+    # Rutas .desktop sí pueden llevar espacios: no se validan.
+    if [[ "$1" != --all && "$1" != *.desktop ]]; then check_pkg_name "$1"; fi
+    ensure_image
     local -a srcs=()
     if [[ "$1" == "--all" ]]; then
         mapfile -t srcs < <(find "$ARXY_ROOT/usr/share/applications" -maxdepth 1 -name '*.desktop' 2>/dev/null || true)
@@ -2284,7 +2305,8 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 echo "  [todo] $fid ($reason)"
                 [[ -n "$would" ]] && echo "         would_do: $would"
                 if [[ "$fid" == hold-mesa && -n "$apply" ]]; then
-                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null \
+                        && grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
                         echo "  [hecho] $fid aplicado"
                     else
                         echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1

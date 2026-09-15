@@ -17,6 +17,8 @@ mkdir -p "$ARXY_ROOT/usr/share/applications" "$ARXY_ROOT/usr/bin" "$XDG_DATA_HOM
 . "$HERE/../lib/00-head.sh" >/dev/null 2>&1
 # shellcheck source=../lib/41-desktop.sh
 . "$HERE/../lib/41-desktop.sh" >/dev/null 2>&1
+# shellcheck source=../lib/30-package.sh
+. "$HERE/../lib/30-package.sh" >/dev/null 2>&1 # check_pkg_name para T7
 
 ensure_image() { return 0; }
 update_desktop_db() { return 0; }
@@ -60,6 +62,12 @@ echo "== T6: pkg_desktops recorta prefijo L2 (--root)"
 run_pacman() { [[ "${1:-}" == "-Qlq" ]] && printf '%s/usr/share/applications/%s.desktop\n' "$ARXY_ROOT" "$2"; return 0; }
 out="$(pkg_desktops alga)"
 [[ "$out" == "/usr/share/applications/alga.desktop" ]] && ok "T6 recorte L2" || no "T6 recorte L2 ($out)"
+
+echo "== T7: cmd_export valida nombre ANTES de ensure_image (Q6-H11)"
+out="$(cmd_export "a b" 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T7 nombre con espacio muere claro" || no "T7 nombre con espacio ($rc: $out)"
+out="$(cmd_export "" 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T7 vacio muere claro" || no "T7 vacio ($rc: $out)"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

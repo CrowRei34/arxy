@@ -77,6 +77,13 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
 fi
 unset _frozen_val
 
+# Q6-H9: vacio no es "unset" (:- los confunde y DATA/BUILD/VFILE caerian
+# a rutas reales creyendo aislar). Tras ambos restores, vacio muere claro
+# (die aun no existe aqui: echo+exit con el mismo prefijo).
+if [[ -z "${ARXY_ROOT:-}" ]]; then
+    echo "arxy: error: ARXY_ROOT vacio (unset para usar el default)" >&2
+    exit 1
+fi
 # Derivados de ARXY_ROOT en UN solo punto, DESPUES de ambas restauraciones.
 # Antes se derivaba entre el primer _restore_frozen y el source del usuario
 # real: con sudo sin env y ARXY_ROOT en el conf del usuario real, ROOT

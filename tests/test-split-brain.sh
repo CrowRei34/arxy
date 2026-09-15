@@ -32,8 +32,7 @@ echo "$OUT" | grep -qx "VFILE=/tmp/sb-env/root/var/lib/arxy/version" && echo "PA
 [[ "$(grep -h '^ARXY_DATA=' "$HERE"/../lib/*.sh | wc -l)" == "1" ]] && echo "PASS: T2 ARXY_DATA se asigna en un solo punto" || { echo "FAIL: T2 doble derivacion de ARXY_DATA"; FAIL=$((FAIL+1)); }
 [[ "$(grep -h '^ARXY_BUILD=' "$HERE"/../lib/*.sh | wc -l)" == "1" ]] && echo "PASS: T2 ARXY_BUILD se asigna en un solo punto" || { echo "FAIL: T2 doble derivacion de ARXY_BUILD"; FAIL=$((FAIL+1)); }
 
-# T3: segundo restore (ruta root con user-conf del usuario real).
-# Solo con sudo sin password; si no, SKIP honesto (no se finge).
+# T3: segundo restore (ruta root con user-conf del usuario real).# Solo con sudo sin password; si no, SKIP honesto (no se finge).
 mkdir -p "$D/h3/.config/arxy"
 printf 'ARXY_ROOT="/tmp/sb3-conf/root"\n' > "$D/h3/.config/arxy/config"
 if sudo -n true 2>/dev/null; then
@@ -44,6 +43,13 @@ if sudo -n true 2>/dev/null; then
 else
     echo "SKIP: T3 exige sudo -n (segundo restore solo corre como root)"
     SKIP=$((SKIP+1))
+fi
+
+# T4: ARXY_ROOT vacio muere en vez de colapsar al real (Q6-H9).
+if HOME="$D/h1" XDG_CONFIG_HOME="$D/h1/.config" ARXY_ROOT="" bash -c '. "$0" >/dev/null 2>&1' "$LIB" 2>/dev/null; then
+    echo "FAIL: T4 ARXY_ROOT vacio aceptado"; FAIL=$((FAIL+1))
+else
+    echo "PASS: T4 ARXY_ROOT vacio rechazado"
 fi
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")${SKIP:+ ($SKIP SKIP)}"

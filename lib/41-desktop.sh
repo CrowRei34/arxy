@@ -17,9 +17,13 @@ desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
 # cmd_export <pkg | archivo.desktop | --all>
 cmd_export() {
     [[ $# -ge 1 ]] || die "uso: $PROG export <paquete | archivo.desktop | --all>"
-    ensure_image
     # Sin flags a run_pacman (P6-H2: -Qlq pasaria la opcion a pacman).
     [[ "$1" == -* && "$1" != --all ]] && die "opcion no soportada en export: '$1'"
+    # Q6-H11: el nombre de paquete se valida ANTES de ensure_image (un "a b"
+    # moria en pacman tras descargar; un "" daba "sin .desktop" rc 0).
+    # Rutas .desktop sí pueden llevar espacios: no se validan.
+    if [[ "$1" != --all && "$1" != *.desktop ]]; then check_pkg_name "$1"; fi
+    ensure_image
     local -a srcs=()
     if [[ "$1" == "--all" ]]; then
         mapfile -t srcs < <(find "$ARXY_ROOT/usr/share/applications" -maxdepth 1 -name '*.desktop' 2>/dev/null || true)

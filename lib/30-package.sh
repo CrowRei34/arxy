@@ -153,17 +153,23 @@ cmd_install() {
     fi
     need_root
     [[ $# -ge 1 ]] || die "uso: $PROG install <paquete...>  |  $PROG install --aur <paquete...>"
-    ensure_image
-    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
-    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
-    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    # Q6-H9/H11/H13: validar TODO el argv ANTES de root/red. Un "" o "my app"
+    # moria en pacman tras escalar y descargar (~130MB). gpu-amd|gpu-nvidia
+    # son virtuales fijos (siempre validos); el resto pasa check_pkg_name.
     local -a pkgs=()
+    local -a gpu_reqs=()
     local g
     for g in "$@"; do
         [[ "$g" == --dry-run ]] && die "--dry-run solo vale con arxy-gaming ('$PROG install arxy-gaming --dry-run')"
         [[ "$g" == -* ]] && die "opcion no soportada en install: '$g'"
-        case "$g" in gpu-amd|gpu-nvidia) cmd_gpu_stack "$g" ;; *) pkgs+=("$g") ;; esac
+        case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
+    ensure_image
+    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
+    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
+    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    local _gr
+    for _gr in ${gpu_reqs[@]+"${gpu_reqs[@]}"}; do cmd_gpu_stack "$_gr"; done
     [[ "${#pkgs[@]}" -gt 0 ]] || return 0
     local -a nc
     nc_args nc
@@ -429,12 +435,16 @@ cmd_install_file() {
 }
 
 cmd_remove() {
-    need_root
     [[ $# -ge 1 ]] || die "uso: $PROG remove <paquete...>"
+    # Q6-H9/H11: validar antes de root/red (igual que install).
+    local _r
+    for _r in "$@"; do
+        [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"
+        check_pkg_name "$_r"
+    done
+    need_root
     ensure_image
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
-    local _r
-    for _r in "$@"; do [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"; done
     local -a nc
     nc_args nc
     pacman_mut -Rns "${nc[@]}" "$@" || die "pacman fallo"
