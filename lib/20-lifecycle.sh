@@ -189,6 +189,12 @@ sig_should_verify() { # 0 = descargar .minisig y verificar, 1 = omitir
     case "${ARXY_IMAGE_URL:-}" in http://*|https://*) return 0 ;; esac
     return 1 # file:// y demas: desarrollo local, sin release que firmarlo
 }
+
+sig_check_compat() { # die si pin + required (fail closed: required exige firma)
+    [[ "${ARXY_SIGNATURE_POLICY:-optional}" == required && -n "${ARXY_IMAGE_SHA256:-}" ]] \
+        || return 0
+    die "ARXY_IMAGE_SHA256 pineado incompatible con ARXY_SIGNATURE_POLICY=required (el pin omite la firma; quita el pin o pon optional)"
+}
 cmd_setup() {
     need_root
     need_cmd curl tar sha256sum zstd
@@ -233,6 +239,7 @@ cmd_setup() {
         required|optional|off) : ;;
         *) die "ARXY_SIGNATURE_POLICY invalida: '$sig_policy' (required|optional|off)" ;;
     esac
+    sig_check_compat
     if sig_should_verify; then
         local sig_url="${ARXY_IMAGE_URL%%\?*}"
         sig_url="${sig_url%%\#*}.minisig"

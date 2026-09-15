@@ -195,8 +195,10 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - Política `ARXY_SIGNATURE_POLICY=required|optional|off` (default
   `optional`, precedencia env > user > sys como el resto; inválida = die).
   Firma inválida/ausente = die salvo `off`; solo minisign-ausente +
-  `optional` = warn. Estado en `$ARXY_DATA/.arxy-sig` (`1` solo si
-  minisign verificó); `doctor --json` lo expone aditivo (`format: 1` intacto).
+  `optional` = warn. Pin (`ARXY_IMAGE_SHA256`) + `required` = die
+  (fail closed: el pin omite la firma). Estado en `$ARXY_DATA/.arxy-sig`
+  (`1` solo si minisign verificó); `doctor --json` lo expone aditivo
+  (`format: 1` intacto).
 
 ## No resucitar sin contexto
 

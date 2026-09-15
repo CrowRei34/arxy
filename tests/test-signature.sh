@@ -61,6 +61,16 @@ t "T8 invalida+off se ignora" off 1 0
 ( export ARXY_SIGNATURE_POLICY=bogus; enforce_signature_policy 0 >/dev/null 2>&1 ); rc=$?
 [[ "$rc" != 0 ]] && ok "T: policy invalida muere" || no "T: policy invalida muere"
 
+echo "== sig_check_compat (pin + required = die) =="
+( export ARXY_SIGNATURE_POLICY=required ARXY_IMAGE_SHA256="abc123"; sig_check_compat >/dev/null 2>&1 ); rc=$?
+[[ "$rc" != 0 ]] && ok "T: pin+required muere" || no "T: pin+required muere"
+err="$( ( export ARXY_SIGNATURE_POLICY=required ARXY_IMAGE_SHA256="abc123"; sig_check_compat ) 2>&1 >/dev/null || true)"
+grep -q 'incompatible' <<<"$err" && ok "T: mensaje dice incompatible" || no "T: mensaje dice incompatible" "[$err]"
+( export ARXY_SIGNATURE_POLICY=required ARXY_IMAGE_SHA256=""; sig_check_compat >/dev/null 2>&1 ); rc=$?
+[[ "$rc" == 0 ]] && ok "T: required sin pin sigue" || no "T: required sin pin sigue"
+( export ARXY_SIGNATURE_POLICY=optional ARXY_IMAGE_SHA256="abc123"; sig_check_compat >/dev/null 2>&1 ); rc=$?
+[[ "$rc" == 0 ]] && ok "T: optional+pin sigue" || no "T: optional+pin sigue"
+
 echo "== sig_should_verify =="
 s() { # s <nombre> <want: 0|1> : con env ya fijado en subshell
     local name="$1" want="$2" rc
