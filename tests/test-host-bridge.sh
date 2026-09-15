@@ -160,5 +160,13 @@ EOF
     fi
 fi
 
+echo "== T21: el resolver no toca el IFS del llamador (P5-H2) =="
+IFS=':'
+bridge_resolve_allowlist <<<"echo" >/dev/null
+[[ "${IFS-}" == ":" ]] && echo "PASS: T21 IFS intacto" || { echo "FAIL: T21 IFS intacto"; FAIL=$((FAIL+1)); }
+unset IFS
+out21="$(printf 'a:b:c\n' | { IFS=,; bridge_resolve_allowlist <<<"echo" >/dev/null; printf '%s' "$IFS"; })"
+[[ "$out21" == "," ]] && echo "PASS: T21 IFS local no fuga" || { echo "FAIL: T21 IFS local no fuga (tengo [$out21])"; FAIL=$((FAIL+1)); }
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

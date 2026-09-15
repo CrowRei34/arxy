@@ -2687,16 +2687,16 @@ bridge_default_allowlist() { # nombres (proton no es binario PATH: va por steam)
 bridge_resolve_allowlist() { # nombres -> paths absolutos (avisa y salta)
     # Busqueda manual en PATH (command -v devuelve builtins/funciones,
     # que no son ficheros ejecutables: 'echo' no resolveria nunca).
+    # IFS acotado con local (el unset global destruia el IFS del llamador).
     local n d p
+    local IFS=':'
     while IFS= read -r n; do
         [[ -n "$n" ]] || continue
         p=""
         # shellcheck disable=SC2086 # split de PATH por : intencionado
-        IFS=:
         for d in ${PATH:-/usr/bin:/bin}; do
             [[ -n "$d" && -x "$d/$n" && ! -d "$d/$n" ]] && { p="$d/$n"; break; }
         done
-        unset IFS
         [[ -n "$p" ]] || { msg "aviso bridge: '$n' no resuelve, se omite" >&2; continue; }
         p="$(readlink -f "$p" 2>/dev/null || true)"
         [[ -n "$p" && -x "$p" ]] || { msg "aviso bridge: '$n' no ejecutable, se omite" >&2; continue; }
