@@ -195,12 +195,12 @@ cmd_install_aur() {
         [[ "$p" == -* ]] && continue
         f="$(aur_build "$p")"
         if [[ -z "${f:-}" || ! -f "$f" ]]; then
-            msg "error: fallo al construir $p (sigo con el resto)"
+            msg "error: fallo al construir $p (sigo con el resto)" >&2
             failed+=("$p")
             continue
         fi
         if ! as_root "$SELF" __install-file "$f"; then
-            msg "error: fallo al instalar $p (sigo con el resto)"
+            msg "error: fallo al instalar $p (sigo con el resto)" >&2
             failed+=("$p")
             continue
         fi

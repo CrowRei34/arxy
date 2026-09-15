@@ -49,5 +49,12 @@ else
     ok "T3 avisos a stderr"
 fi
 
+echo "== T4: todo error: va a stderr (P5-H5; tripwire)"
+if grep -rn 'msg "error:' "$HERE/../lib" | grep -v '>&2' | grep -q .; then
+    no "T4 errores a stderr" "$(grep -rn 'msg "error:' "$HERE/../lib" | grep -v '>&2' | head -n 3 | tr '\n' ' ')"
+else
+    ok "T4 errores a stderr"
+fi
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
