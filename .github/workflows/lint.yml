@@ -32,3 +32,20 @@ jobs:
           cmp config/arxy.conf packaging/void/arxy/files/arxy.conf
           cmp config/arxy.pub packaging/void/arxy/files/arxy.pub
           echo SYNC_OK
+
+  sig-vector:
+    # A5: la cripto real solo corre con binario presente; los fakes no bastan.
+    # Este job instala minisign para que el vector conocido + roundtrip de
+    # test-signature.sh ejecuten (no SKIP) en cada push/PR.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install minisign
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
+
+      - name: test-signature.sh con minisign real
+        run: |
+          bash tests/test-signature.sh | tee /tmp/sig.log
+          grep -q 'TODO_OK' /tmp/sig.log
+          ! grep -q '^SKIP' /tmp/sig.log

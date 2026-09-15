@@ -108,5 +108,24 @@ else
     echo "SKIP: roundtrip real (sin minisign)"
 fi
 
+echo "== vector conocido commiteado (A5: cripto real sin keygen) =="
+# tests/fixtures/sig-vector/* : mensaje + pubkey + .minisig fijos, generados
+# una vez con minisign real (la secreta se destruyo). Pinea el comportamiento:
+# un verify_signature que delegue mal (args cruzados, rc inventado) falla aqui
+# aunque pase los fakes de arriba. Solo SKIP sin binario (el CI lo instala).
+if command -v minisign >/dev/null 2>&1; then
+    V="$HERE/fixtures/sig-vector"
+    ( verify_signature "$V/msg.bin" "$V/msg.minisig" "$V/t.pub" ); rc=$?
+    [[ "$rc" == 0 ]] && ok "vector: firma valida" || no "vector: firma valida" "$rc"
+    cp "$V/msg.bin" "$D/v-tocada.bin" && printf 'X' >>"$D/v-tocada.bin"
+    ( verify_signature "$D/v-tocada.bin" "$V/msg.minisig" "$V/t.pub" ); rc=$?
+    [[ "$rc" == 1 ]] && ok "vector: mensaje tocado falla" || no "vector: mensaje tocado falla" "$rc"
+    cp "$V/msg.minisig" "$D/v-sig-tocada.minisig" && sed -i '2s/./X/' "$D/v-sig-tocada.minisig"
+    ( verify_signature "$V/msg.bin" "$D/v-sig-tocada.minisig" "$V/t.pub" ); rc=$?
+    [[ "$rc" == 1 ]] && ok "vector: firma tocada falla" || no "vector: firma tocada falla" "$rc"
+else
+    echo "SKIP: vector conocido (sin minisign)"
+fi
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
