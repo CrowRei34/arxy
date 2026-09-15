@@ -92,6 +92,7 @@ run_in() {
             case "$_k" in
                 vulkan) _d=/usr/share/vulkan/icd.d ;;
                 egl) _d=/usr/share/egl/egl_external_platform.d ;;
+                # ponytail: glvnd egl_vendor.d sin montar (OUT-OF-SCOPE §6); upgrade con --ro-bind-data como los ICDs.
                 *) continue ;;
             esac
             # El FD debe abrirse en ESTE shell (en un $() moriria con el
