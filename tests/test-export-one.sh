@@ -69,5 +69,11 @@ out="$(cmd_export "a b" 2>&1)"; rc=$?
 out="$(cmd_export "" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T7 vacio muere claro" || no "T7 vacio ($rc: $out)"
 
+echo "== T8: export --all etiqueta deducido, no literal (R1-H4)"
+rm -f "$XDG_DATA_HOME/applications"/arxy-*.desktop
+cmd_export --all >/dev/null 2>&1
+! grep -rq "^X-Arxy-Pkg=--all$" "$XDG_DATA_HOME/applications/" 2>/dev/null && ok "T8 sin literal --all" || no "T8 sin literal --all"
+grep -q "^X-Arxy-Pkg=codes$" "$XDG_DATA_HOME/applications/arxy-codes.desktop" 2>/dev/null && ok "T8 deducido codes" || no "T8 deducido codes"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

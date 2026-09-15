@@ -43,9 +43,19 @@ cmd_export() {
         done < <(pkg_desktops "$1")
         [[ "${#srcs[@]}" -gt 0 ]] || { msg "sin .desktop para '$1'"; return 0; }
     fi
-    local s
+    local s lbl
     for s in "${srcs[@]}"; do
-        export_one "$s" "$1"
+        # R1-H4: export --all / <archivo.desktop> etiquetaba con el
+        # literal ("--all", "foo.desktop") y remove nunca lo encontraba
+        # (solo borra por nombre exacto de paquete). Deducir por fichero
+        # con la misma funcion que migrate (idempotente).
+        if [[ "$1" == --all || "$1" == *.desktop ]]; then
+            lbl="$(_desktop_infer_pkg "$s")"
+            [[ -n "$lbl" ]] || lbl="$1"
+            export_one "$s" "$lbl"
+        else
+            export_one "$s" "$1"
+        fi
     done
     update_desktop_db
 }

@@ -30,19 +30,30 @@ t "fix --json rc == json" -- sh -c '"$0" doctor --fix --json >/dev/null 2>&1; a=
 # dri/nvidia del host. Si hold-mesa desaparece, el grep sigue fallando.
 mkdir -p "$D/glibclib" "$D/glibclib64" "$D/emptydev" "$D/emptyroot"
 touch "$D/glibclib64/ld-linux-x86-64.so.2"
-t "fix --json fixes_available" -- sh -c 'ARXY_LIB_DIR="'"$D"'/glibclib" ARXY_LIB64_DIR="'"$D"'/glibclib64" ARXY_DEV_PATH="'"$D"'/emptydev" ARXY_SYS_ROOT="'"$D"'/emptyroot" ARXY_SYS_DRM_PATH="'"$D"'/emptyroot/drm" "$0" doctor --fix --json 2>/dev/null | grep -q "\"fixes_available\": \[\"hold-mesa\"\]"' "$BIN"
+# R5-H8: sin rootfs no hay fixes disponibles (hold-mesa y musl son skip,
+# no ok/todo). Con mocks glibc + dev vacio, todo es skip -> [].
+t "fix --json fixes_available vacio sin rootfs" -- sh -c 'ARXY_LIB_DIR="'"$D"'/glibclib" ARXY_LIB64_DIR="'"$D"'/glibclib64" ARXY_DEV_PATH="'"$D"'/emptydev" ARXY_SYS_ROOT="'"$D"'/emptyroot" ARXY_SYS_DRM_PATH="'"$D"'/emptyroot/drm" "$0" doctor --fix --json 2>/dev/null | grep -q "\"fixes_available\": \[\]"' "$BIN"
 t "fix --json objetos phase" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": [a-z]*, \"destructive\": false, \"requires_root\": true"' "$BIN"
 t "fix --json staging-cleanup phase null" -- sh -c '"$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"staging-cleanup\", \"applicable\": false.*\"phase\": null"' "$BIN"
 t "fix --apply --json avisa" -- sh -c '"$0" doctor --fix --apply --json 2>/dev/null >/dev/null; "$0" doctor --fix --apply --json 2>&1 >/dev/null | grep -q "lista fixes sin aplicarlos"' "$BIN"
+# R5-H3: sin imagen, doctor sugiere siguiente paso (la via xbps no muestra
+# el eco de install.sh).
+t "doctor sin imagen sugiere setup" -- sh -c '"$0" doctor 2>&1 | grep -q "siguiente: .* setup"' "$BIN"
 
-# Mocks: nvidia presente (sin rootfs -> aplicable) y musl con dri (aplicable).
+# Mocks: nvidia presente (sin rootfs -> aplicable) y musl con dri (aplicable
+# solo con rootfs: R5-H8 marca skip sin rootfs verificado).
 mkdir -p "$D/nv/proc/driver/nvidia" "$D/nvdev"
 printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14\n' > "$D/nv/proc/driver/nvidia/version"
 touch "$D/nvdev/nvidia0"
 mkdir -p "$D/musllib" "$D/musllib64" "$D/muslidev/dri"
 touch "$D/musllib/ld-musl-x86_64.so.1" "$D/muslidev/dri/card0"
+# Fake rootfs minimo para image_ok (R5-H8: musl exige rootfs verificado).
+mkdir -p "$D/fakeroot/usr/bin" "$D/fakeroot/etc"
+touch "$D/fakeroot/usr/bin/bash" "$D/fakeroot/usr/bin/pacman" "$D/fakeroot/etc/arch-release"
+chmod +x "$D/fakeroot/usr/bin/bash" "$D/fakeroot/usr/bin/pacman"
 t "nvidia-align aplicable con mock" -- sh -c 'ARXY_SYS_ROOT="'"$D"'/nv" ARXY_DEV_PATH="'"$D"'/nvdev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": true, \"destructive\": false, \"requires_root\": true.*\"phase\": 4"' "$BIN"
-t "musl-stack aplicable con mock" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"musl-glibc-stack\", \"applicable\": true"' "$BIN"
+t "musl-stack aplicable con mock+rootfs" -- sh -c 'ARXY_ROOT="'"$D"'/fakeroot" ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"musl-glibc-stack\", \"applicable\": true"' "$BIN"
+t "musl-stack skip sin rootfs" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"musl-glibc-stack\", \"applicable\": false"' "$BIN"
 mkdir -p "$D/nvonlydev"
 touch "$D/nvonlydev/nvidia0"
 t "nvidia nodos-sin-version skip preciso" -- sh -c 'ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/nvonlydev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"id\": \"nvidia-align\", \"applicable\": false" && ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/nvonlydev" "$0" doctor --fix --json 2>/dev/null | grep -q "\"reason\": \"nodos nvidia"' "$BIN"
@@ -55,8 +66,8 @@ fi
 # musl-glibc-stack: would_do preciso por vendor (usa gpu_stack_pkgs).
 mkdir -p "$D/drmA/card0/device"
 printf '0x1002' > "$D/drmA/card0/device/vendor"
-t "musl would_do intel por defecto" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-intel lib32-vulkan-intel"' "$BIN"
-t "musl would_do amd con drm" -- sh -c 'ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" ARXY_SYS_DRM_PATH="'"$D"'/drmA" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-radeon lib32-vulkan-radeon"' "$BIN"
+t "musl would_do intel por defecto" -- sh -c 'ARXY_ROOT="'"$D"'/fakeroot" ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-intel lib32-vulkan-intel"' "$BIN"
+t "musl would_do amd con drm" -- sh -c 'ARXY_ROOT="'"$D"'/fakeroot" ARXY_LIB_DIR="'"$D"'/musllib" ARXY_LIB64_DIR="'"$D"'/musllib64" ARXY_DEV_PATH="'"$D"'/muslidev" ARXY_SYS_DRM_PATH="'"$D"'/drmA" "$0" doctor --fix --json 2>/dev/null | grep -q "musl-glibc-stack.*vulkan-radeon lib32-vulkan-radeon"' "$BIN"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

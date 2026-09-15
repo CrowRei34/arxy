@@ -645,6 +645,12 @@ version_field() { # <url|date> : valor (JSON o plano); rc 1 si falta
 version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
     local u d
     u="$(version_field url || true)"; d="$(version_field date || true)"
+    # R3-H6: lectura con fichero corrupto daba campos vacios sin pista
+    # (el proximo setup lo regeneraba con aviso, pero el usuario cansado
+    # no lo veia). Avisar a stderr sin tocar stdout.
+    if [[ -f "$ARXY_VERSION_FILE" && -z "$u$d" ]]; then
+        msg "aviso: version ilegible, regenero en el proximo setup/install" >&2
+    fi
     echo "url=$u date=$d"
 }
 migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)
@@ -1086,7 +1092,10 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     elif ! vendor="$(arxy_gaming_vendor)"; then
         [[ "$(detect_gpu || true)" == nvidia ]] && \
             die "NVIDIA sin driver propietario (¿nouveau?): arxy-gaming exige el modulo propietario"
-        die "GPU no detectada (sin drm/dri): instala a mano, p. ej. '$PROG install --aur arxy-gaming-intel'"
+        # R5-H4: el consejo apuntaba a '--aur arxy-gaming-intel', que es
+        # draft aun no publicado (falla tras el error). Pedir vendor
+        # explicito + dry-run en su lugar.
+        die "GPU no detectada (sin drm/dri): indica vendor a mano ('$PROG install arxy-gaming intel|amd|nvidia --dry-run' para ver)"
     fi
     local -a pkgs=()
     mapfile -t pkgs < <(arxy_gaming_pkgs "$vendor")
@@ -1823,9 +1832,19 @@ cmd_export() {
         done < <(pkg_desktops "$1")
         [[ "${#srcs[@]}" -gt 0 ]] || { msg "sin .desktop para '$1'"; return 0; }
     fi
-    local s
+    local s lbl
     for s in "${srcs[@]}"; do
-        export_one "$s" "$1"
+        # R1-H4: export --all / <archivo.desktop> etiquetaba con el
+        # literal ("--all", "foo.desktop") y remove nunca lo encontraba
+        # (solo borra por nombre exacto de paquete). Deducir por fichero
+        # con la misma funcion que migrate (idempotente).
+        if [[ "$1" == --all || "$1" == *.desktop ]]; then
+            lbl="$(_desktop_infer_pkg "$s")"
+            [[ -n "$lbl" ]] || lbl="$1"
+            export_one "$s" "$lbl"
+        else
+            export_one "$s" "$1"
+        fi
     done
     update_desktop_db
 }
@@ -2246,7 +2265,11 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
     local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
-            if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+            # R5-H8: sin rootfs no hay pacman.conf que verificar (antes
+            # devolvia 'ok' y el JSON lo listaba como disponible).
+            if ! image_ok; then
+                echo "skip|sin rootfs verificado||"
+            elif image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
                 echo "todo|un update traeria mesa oficial +170MB|añadir 'IgnorePkg = mesa' bajo [options] de pacman.conf|"
             else
                 echo "ok|hold activo o innecesario||"
@@ -2278,6 +2301,9 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
+            # R5-H8: sin rootfs no hay donde instalar el stack (antes
+            # proponia would_do sin rootfs existente).
+            if ! image_ok; then echo "skip|sin rootfs verificado||"; return 0; fi
             # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
             # nunca muere: fallback explicito.
             _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
@@ -2325,7 +2351,9 @@ fixes_json() { # array "fixes" para --json (fixes_available sigue siendo [ids])
     for fid in "${FIX_IDS[@]}"; do
         out="$(fix_probe "$fid")"
         IFS='|' read -r st reason would opt <<<"$out"
-        if [[ "$st" == skip ]]; then app=false; else app=true; fi
+        # R5-H8: aplicable solo si hay trabajo (todo). 'ok' y 'skip'
+        # son false (antes 'ok' era true con would_do vacio).
+        if [[ "$st" == todo ]]; then app=true; else app=false; fi
         dest=false; req=true
         case "$fid" in hold-mesa|staging-cleanup) phase=null ;; *) phase=4 ;; esac
         if [[ -n "$would" ]]; then wd="$(json_str "$would")"; else wd=""; fi
@@ -2458,7 +2486,11 @@ cmd_doctor() {
     else
         say 1 "user namespaces (necesarios para correr sin root)"
     fi
-    image_ok; say $? "imagen en $ARXY_ROOT"
+    image_ok; local _img=$?
+    say $_img "imagen en $ARXY_ROOT"
+    # R5-H3: el recien instalado no recibe "siguiente paso" (la via xbps
+    # no muestra el eco de install.sh). Sugerir setup/quickstart aqui.
+    if (( _img != 0 )); then msg "siguiente: $PROG setup (descarga ~130MB) o $PROG quickstart"; fi
     [[ -f "$ARXY_VERSION_FILE" ]] && msg "imagen: $(version_line)"
     [[ -n "$ARXY_IMAGE_URL" ]]; say $? "ARXY_IMAGE_URL configurada"
     # Deteccion sin dependencias exoticas: solo bwrap funcional (nunca unshare).
@@ -2612,10 +2644,18 @@ emit_hardware_json() {
     local fixes="" fid fst
     for fid in "${FIX_IDS[@]}"; do
         fst="$(fix_probe "$fid" | cut -d'|' -f1)"
-        [[ "$fst" != skip ]] && fixes+="$fid "
+        # R5-H8: solo 'todo' es disponible/aplicable (antes 'ok' tambien
+        # entraba: texto decia [ok] y el JSON lo listaba aplicable con
+        # would_do vacio).
+        [[ "$fst" == todo ]] && fixes+="$fid "
     done
     local rver=""
     [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(version_field date || true)"
+    # R3-H6 (ruta JSON): mismo aviso que version_line, a stderr, sin
+    # tocar el documento (version:null ya es el contrato en corrupto).
+    if [[ -f "$ARXY_VERSION_FILE" && -z "$rver" ]]; then
+        msg "aviso: version ilegible, regenero en el proximo setup/install" >&2
+    fi
     printf '{"format": 1'
     printf ', "level": %s' "$_ARXY_LEVEL"
     printf ', "libc": {"kind": "%s", "version": %s}' "$lckind" "$(json_str_or_null "$lcver")"
@@ -2721,34 +2761,40 @@ cmd_help() {
 $PROG $ARXY_VERSION — subsistema Arch minimalista (rápido, sin sandbox).
 
 Uso: $PROG <comando> [args...]   (axy es alias de $PROG)
+Sin ayuda por comando: cada mal uso imprime su uso de una linea.
 
+Empezar:
+  setup                (re)descarga e instala la imagen (atomico, con rollback)
+  quickstart|qs        dice tu siguiente paso segun estado (para empezar)
+  doctor [--fix [--apply]|--json]  verifica (fix informa; --apply root)
+  version [--verbose]  version CLI+imagen (verbose: nivel/GPU/tamaño/hold)
+  help                 esta ayuda
+
+Dia a dia:
   install|i <pkg...>   instalar paquetes de Arch (+ crea lanzadores .desktop)
   install gpu-amd|gpu-nvidia  stack GL completo para esas GPUs (+~170MB)
   install arxy-gaming [--dry-run]  stack gaming segun GPU (rewrite a arxy-gaming-<vendor>)
   install --aur <pkg>  instalar de AUR (precompilados -bin, motor paru)
   remove|rm <pkg...>   desinstalar (+ borra sus lanzadores)
   update|up            actualizar todo el subsistema (pacman -Syu)
-  clean [--apply]   informa uso (rootfs/cache/AUR) y limpia con --apply
-  gc [--json] [--apply]  informa bytes (rollback/cache/build/staging) en texto o JSON; --apply purga
-  dedup                hardlinkea ficheros identicos de /usr (ahorra disco)
-  info <pkg>           info de un paquete (instalado o de repos)
-  list|l               paquetes instalados ([desktop] = tiene lanzador)
+  run|r <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
+  shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   search|s <texto>     buscar en repos
   search-aur|sa <txt>  buscar en AUR (paru o RPC; requiere jq)
-  run|r <bin|ruta> [...] ejecutar programa del subsistema o binario suelto
-  host-bridge [--daemon|--stop|--status] [--socket P] [--allowed-cmd BIN...]
-                       daemon host-bridge (Fase 5; sin allowlist no arranca)
+  info <pkg>           info de un paquete (instalado o de repos)
+  list|l               paquetes instalados ([desktop] = tiene lanzador)
   which|w <bin|ruta>    muestra donde se resolveria ([subsistema] o [host])
-  shell [cmd...]       terminal Arch completa (admin: sudo $PROG shell)
   export <pkg|f.desktop|--all>  (re)crear lanzadores .desktop
   unexport <nombre>    borrar un lanzador
   desktop --migrate    migrar lanzadores legacy sin X-Arxy-Pkg (idempotente)
-  doctor [--fix [--apply]|--json]  verifica (fix informa; --apply root)
-  quickstart|qs        dice tu siguiente paso segun estado (para empezar)
-  setup                (re)descarga e instala la imagen (atomico, con rollback)
+  host-bridge [--daemon|--stop|--status] [--socket P] [--allowed-cmd BIN...]
+                       daemon host-bridge (Fase 5; sin allowlist no arranca)
+
+Reparar y mantener:
   rollback             restaura el setup inmediato anterior (1 sola generacion)
-  version [--verbose]  version CLI+imagen (verbose: nivel/GPU/tamaño/hold)
-  help                 esta ayuda
+  clean [--apply]   informa uso (rootfs/cache/AUR) y limpia con --apply
+  gc [--json] [--apply]  informa bytes (rollback/cache/build/staging) en texto o JSON; --apply purga
+  dedup                hardlinkea ficheros identicos de /usr (ahorra disco)
 
 Atajos: i add, rm uninstall, up upgrade, clean-cache, show, l ls installed, s find, sa, r exec x, w, sh enter, check, qs start, init, -v --version, -h --help. Si el comando no existe, se interpreta como 'run':
   $PROG firefox   ==   $PROG run firefox

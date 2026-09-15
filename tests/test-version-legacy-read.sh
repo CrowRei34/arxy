@@ -30,6 +30,10 @@ g="$(version_field date 2>/dev/null || true)"; [[ "$g" == "2026-01-01T00:00:00Z"
 version_field frobnicate 2>/dev/null; [[ $? -eq 1 ]] && ok "clave mala rc 1" || no "clave mala rc 1" "rc 1" "rc $?"
 rm -f "$D/version"
 version_field url 2>/dev/null; [[ $? -eq 1 ]] && ok "ausente rc 1" || no "ausente rc 1" "rc 1" "rc $?"
+echo "== R3-H6: lectura corrupta avisa a stderr sin tocar stdout"
+printf 'garbage{{{\n' > "$D/version"
+out="$(version_line 2>/dev/null)"; err="$(version_line 2>&1 >/dev/null)"
+[[ "$out" == "url= date=" ]] && grep -q "aviso: version ilegible" <<<"$err" && ok "R3-H6 aviso corrupto" || no "R3-H6 aviso corrupto" "url= date= + aviso" "out='$out' err='$err'"
 if [[ "$(id -u)" -eq 0 ]]; then
     echo "SKIP: ilegible sin permisos (este shell es root, lee igual)"
 else

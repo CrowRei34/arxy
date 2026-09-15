@@ -48,6 +48,8 @@ no() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 echo "== T0: sin GPU decidible falla claro"
 out="$(ARXY_SYS_DRM_PATH="$D/empty" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "GPU no detectada" <<<"$out" && ok "T0 rc+mensaje" || no "T0 rc+mensaje (rc=$rc)"
+# R5-H4: no sugerir --aur draft inexistente; pedir vendor explicito.
+! grep -q -- "--aur arxy-gaming" <<<"$out" && grep -q "arxy-gaming intel|amd|nvidia --dry-run" <<<"$out" && ok "T0b sin --aur, con vendor" || no "T0b sin --aur, con vendor ($out)"
 
 echo "== T1/T2: dry-run por vendor"
 out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming --dry-run 2>&1)"

@@ -136,6 +136,12 @@ version_field() { # <url|date> : valor (JSON o plano); rc 1 si falta
 version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
     local u d
     u="$(version_field url || true)"; d="$(version_field date || true)"
+    # R3-H6: lectura con fichero corrupto daba campos vacios sin pista
+    # (el proximo setup lo regeneraba con aviso, pero el usuario cansado
+    # no lo veia). Avisar a stderr sin tocar stdout.
+    if [[ -f "$ARXY_VERSION_FILE" && -z "$u$d" ]]; then
+        msg "aviso: version ilegible, regenero en el proximo setup/install" >&2
+    fi
     echo "url=$u date=$d"
 }
 migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)

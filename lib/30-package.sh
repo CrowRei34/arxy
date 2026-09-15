@@ -78,7 +78,10 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     elif ! vendor="$(arxy_gaming_vendor)"; then
         [[ "$(detect_gpu || true)" == nvidia ]] && \
             die "NVIDIA sin driver propietario (¿nouveau?): arxy-gaming exige el modulo propietario"
-        die "GPU no detectada (sin drm/dri): instala a mano, p. ej. '$PROG install --aur arxy-gaming-intel'"
+        # R5-H4: el consejo apuntaba a '--aur arxy-gaming-intel', que es
+        # draft aun no publicado (falla tras el error). Pedir vendor
+        # explicito + dry-run en su lugar.
+        die "GPU no detectada (sin drm/dri): indica vendor a mano ('$PROG install arxy-gaming intel|amd|nvidia --dry-run' para ver)"
     fi
     local -a pkgs=()
     mapfile -t pkgs < <(arxy_gaming_pkgs "$vendor")

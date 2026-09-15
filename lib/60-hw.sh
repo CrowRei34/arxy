@@ -131,7 +131,11 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
     local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
-            if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+            # R5-H8: sin rootfs no hay pacman.conf que verificar (antes
+            # devolvia 'ok' y el JSON lo listaba como disponible).
+            if ! image_ok; then
+                echo "skip|sin rootfs verificado||"
+            elif image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
                 echo "todo|un update traeria mesa oficial +170MB|añadir 'IgnorePkg = mesa' bajo [options] de pacman.conf|"
             else
                 echo "ok|hold activo o innecesario||"
@@ -163,6 +167,9 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
+            # R5-H8: sin rootfs no hay donde instalar el stack (antes
+            # proponia would_do sin rootfs existente).
+            if ! image_ok; then echo "skip|sin rootfs verificado||"; return 0; fi
             # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
             # nunca muere: fallback explicito.
             _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
@@ -210,7 +217,9 @@ fixes_json() { # array "fixes" para --json (fixes_available sigue siendo [ids])
     for fid in "${FIX_IDS[@]}"; do
         out="$(fix_probe "$fid")"
         IFS='|' read -r st reason would opt <<<"$out"
-        if [[ "$st" == skip ]]; then app=false; else app=true; fi
+        # R5-H8: aplicable solo si hay trabajo (todo). 'ok' y 'skip'
+        # son false (antes 'ok' era true con would_do vacio).
+        if [[ "$st" == todo ]]; then app=true; else app=false; fi
         dest=false; req=true
         case "$fid" in hold-mesa|staging-cleanup) phase=null ;; *) phase=4 ;; esac
         if [[ -n "$would" ]]; then wd="$(json_str "$would")"; else wd=""; fi
@@ -343,7 +352,11 @@ cmd_doctor() {
     else
         say 1 "user namespaces (necesarios para correr sin root)"
     fi
-    image_ok; say $? "imagen en $ARXY_ROOT"
+    image_ok; local _img=$?
+    say $_img "imagen en $ARXY_ROOT"
+    # R5-H3: el recien instalado no recibe "siguiente paso" (la via xbps
+    # no muestra el eco de install.sh). Sugerir setup/quickstart aqui.
+    if (( _img != 0 )); then msg "siguiente: $PROG setup (descarga ~130MB) o $PROG quickstart"; fi
     [[ -f "$ARXY_VERSION_FILE" ]] && msg "imagen: $(version_line)"
     [[ -n "$ARXY_IMAGE_URL" ]]; say $? "ARXY_IMAGE_URL configurada"
     # Deteccion sin dependencias exoticas: solo bwrap funcional (nunca unshare).
@@ -497,10 +510,18 @@ emit_hardware_json() {
     local fixes="" fid fst
     for fid in "${FIX_IDS[@]}"; do
         fst="$(fix_probe "$fid" | cut -d'|' -f1)"
-        [[ "$fst" != skip ]] && fixes+="$fid "
+        # R5-H8: solo 'todo' es disponible/aplicable (antes 'ok' tambien
+        # entraba: texto decia [ok] y el JSON lo listaba aplicable con
+        # would_do vacio).
+        [[ "$fst" == todo ]] && fixes+="$fid "
     done
     local rver=""
     [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(version_field date || true)"
+    # R3-H6 (ruta JSON): mismo aviso que version_line, a stderr, sin
+    # tocar el documento (version:null ya es el contrato en corrupto).
+    if [[ -f "$ARXY_VERSION_FILE" && -z "$rver" ]]; then
+        msg "aviso: version ilegible, regenero en el proximo setup/install" >&2
+    fi
     printf '{"format": 1'
     printf ', "level": %s' "$_ARXY_LEVEL"
     printf ', "libc": {"kind": "%s", "version": %s}' "$lckind" "$(json_str_or_null "$lcver")"
