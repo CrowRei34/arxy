@@ -1,7 +1,9 @@
 // arxy-bridged — spike D1: prototipo del daemon host-bridge de arxy.
 // Clona el protocolo de hrun: framing 4B big-endian + JSON, MaxFrame 128KiB,
 // mensajes request/input/close-input/resize/output/error/exit, auth SO_PEERCRED
-// (uid peer == getuid()), socket 0600, allowlist por realpath + X_OK, límites.
+// (uid peer == getuid()) + token opcional del daemon (--token; NULL = sin
+// exigir, compat tests; ver OUT-OF-SCOPE §12), socket 0600, allowlist por
+// realpath + X_OK, límites.
 // C11/POSIX, solo libc, sin dependencias externas.
 // Uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]
 // DEUDA Fase 5 (auditoría pre-commit; el spike se commitea tal cual):
