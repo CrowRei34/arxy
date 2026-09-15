@@ -66,6 +66,7 @@ static const char *g_sockpath;
 static const char *g_token = NULL; // NULL = sin exigir (compat tests sin token)
 
 static void die(const char *m) { fprintf(stderr, "arxy-bridged: %s\n", m); exit(1); }
+static char diebuf[512]; // Q5-H21: mensajes die() con contexto (path+strerror)
 static void usage(void) { fprintf(stderr, "uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]\n"); }
 
 // ---------- io ----------
@@ -660,13 +661,14 @@ static int secure_listen(const char *path) {
     if (stat(dir, &st) || st.st_uid != getuid()) die("socket dir not owned by you");
     unlink(path); // stale de un apagado sucio
     int ls = socket(AF_UNIX, SOCK_STREAM, 0);
-    if (ls < 0) die("socket failed");
+    // Q5-H21: con path+strerror (antes indistinguible stale vs permisos).
+    if (ls < 0) { snprintf(diebuf, sizeof diebuf, "socket failed for '%s': %s", path, strerror(errno)); die(diebuf); }
     struct sockaddr_un a; memset(&a, 0, sizeof a);
     a.sun_family = AF_UNIX;
     size_t pl = strlen(path);
     if (pl >= sizeof a.sun_path) die("socket path too long");
     memcpy(a.sun_path, path, pl + 1);
-    if (bind(ls, (struct sockaddr *)&a, sizeof a) || listen(ls, LISTEN_BACKLOG)) { close(ls); die("bind/listen failed"); }
+    if (bind(ls, (struct sockaddr *)&a, sizeof a) || listen(ls, LISTEN_BACKLOG)) { close(ls); snprintf(diebuf, sizeof diebuf, "bind/listen failed for '%s': %s", path, strerror(errno)); die(diebuf); }
     chmod(path, SOCK_MODE);
     return ls;
 }
