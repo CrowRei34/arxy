@@ -1097,6 +1097,13 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     fi
     local -a off=() aur=() p
     for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
+    # Q4-H5: en L2 la parte AUR moriria tras aplicar la oficial (medio-
+    # estado: multilib+mesa instalados, AUR pendiente). Fallar antes de
+    # tocar nada (el dry-run ya volvio arriba).
+    level 2>/dev/null || true
+    if [[ "${_ARXY_LEVEL:-}" == 2 && "${#aur[@]}" -gt 0 ]]; then
+        die "arxy-gaming exige nivel 1 para su parte AUR (estas en nivel 2; nada aplicado)"
+    fi
     # makepkg prohibe root: la parte AUR se compila como usuario ANTES de
     # elevar (tras need_root ya es tarde). Con ARXY_GAMING_AUR_DONE la
     # re-ejecucion elevada la salta. Root-directo sin usuario que la haga:
@@ -1704,8 +1711,13 @@ gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
     # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
     # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
     # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
+    # Q4-H5: NVIDIA pinneado al modulo del host (como arxy_gaming_pkgs);
+    # sin version legible se muere claro (un utils sin pin rompe el GL).
+    local ver=""
     case "$(detect_gpu || true)" in
-        nvidia) printf '%s\n' nvidia-utils lib32-nvidia-utils ;;
+        nvidia) ver="$(detect_nvidia_ver || true)"
+            [[ -n "$ver" ]] || die "NVIDIA sin version legible (¿nouveau?): nvidia-utils sin pin romperian el GL"
+            printf '%s\n' "nvidia-utils=$ver" "lib32-nvidia-utils=$ver" ;;
         amd) printf '%s\n' vulkan-radeon lib32-vulkan-radeon ;;
         *) printf '%s\n' vulkan-intel lib32-vulkan-intel ;;
     esac
@@ -2028,6 +2040,7 @@ cmd_run() {
     resolve_target "$target" # sin $(): el subshell perderia RESOLVED_HOST
     target="$RESOLVED_TARGET"
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
+        bridge_env_l2 # Q4-H7: L2 tambien integra el host (socket+token)
         [[ -n "$RESOLVED_HOST" ]] && exec "$target" "$@" # binario del host: nativo
         case "$target" in "$ARXY_ROOT"/*) ;; *) target="$ARXY_ROOT$target" ;; esac
         level2_env
@@ -2041,6 +2054,7 @@ cmd_run() {
 # host no resuelve caen en command_not_found_handle (ver level2-rc de setup).
 cmd_shell_level2() {
     level2_env
+    bridge_env_l2 # Q4-H7: la shell L2 tambien ve el bridge
     export PS1="(arxy:2) \\u@\\h \\w\\$ "
     local rcfile="$ARXY_DATA/level2-rc"
     if [[ $# -ge 1 ]]; then
@@ -2224,7 +2238,7 @@ doctor_gpu() {
 # La usan el bloque de texto y el array "fixes" del JSON (una sola logica).
 # Razon/would_do nunca traen '|' (separador).
 fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
-    local nv inst lc dri g
+    local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
             if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
@@ -2259,7 +2273,11 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $(gpu_stack_pkgs | xargs)|"
+            # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
+            # nunca muere: fallback explicito.
+            _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
+            [[ -n "$_gsp" ]] || _gsp="nvidia-utils (version del host ilegible: instala a mano)"
+            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $_gsp|"
             ;;
         gpu-full-stack)
             g="$(detect_gpu || true)"
@@ -2331,6 +2349,9 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
     [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
+    # Q4-H6: avisar si hay sesion bridge viva (el apply rota el root).
+    # Guarda command -v: tests que sourcean 60-hw sin 80-bridge no la tienen.
+    [[ -n "$apply" ]] && command -v bridge_session_notice >/dev/null 2>&1 && bridge_session_notice
     local fid out st reason would opt
     echo "fixes available: ${#FIX_IDS[@]}"
     for fid in "${FIX_IDS[@]}"; do
@@ -2353,11 +2374,18 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     echo "  [hecho] $fid aplicado (ver 'recuperado:' arriba)"
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
-                    mapfile -t _sp < <(gpu_stack_pkgs)
-                    if cmd_install "${_sp[@]}"; then
-                        echo "  [hecho] $fid aplicado"
+                    local _sout
+                    # Q4-H5: si la lista muere (NVIDIA ilegible), [fallo]
+                    # honesto ANTES de instalar nada (no medio-estado).
+                    if ! _sout="$(gpu_stack_pkgs)" || [[ -z "$_sout" ]]; then
+                        echo "  [fallo] $fid no se pudo aplicar (lista vacia o version ilegible)" >&2; fails=1
                     else
-                        echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        mapfile -t _sp <<<"$_sout"
+                        if cmd_install "${_sp[@]}"; then
+                            echo "  [hecho] $fid aplicado"
+                        else
+                            echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        fi
                     fi
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
@@ -2790,6 +2818,37 @@ bridge_resolve_allowlist() { # nombres -> paths absolutos (avisa y salta)
 }
 bridge_token_new() { # 64 hex de /dev/urandom (del daemon, Commit 17 lo refina)
     head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' || true
+}
+bridge_env_l2() { # Q4-H7: L2 no pasa por run_in (exec ld-linux directo) y
+    # las apps perdian el bridge en silencio. Misma resolucion que run_in
+    # (incluido fallback P5-H10) pero con export (el path vale tal cual,
+    # sin namespace). Best-effort: sin socket vivo, silencio total.
+    [[ -z "${ARXY_NO_BRIDGE:-}" ]] || return 0
+    ensure_bridge_daemon || true
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-$(id -u).sock"
+    [[ -S "$_bsock" ]] || return 0
+    local _bpid
+    _bpid="$(bridge_pid_path "$_bsock")"
+    if [[ ! -f "$_bpid" ]] || bridge_pid_alive "$_bpid"; then
+        export ARXY_BRIDGE_SOCKET="$_bsock"
+        local _btok
+        _btok="$(cat "$(bridge_token_path "$_bsock")" 2>/dev/null || true)"
+        [[ -n "$_btok" ]] && export ARXY_BRIDGE_TOKEN="$_btok"
+    fi
+    return 0
+}
+bridge_session_notice() { # Q4-H6: para doctor --fix --apply (yMsgs): avisa
+    # si hay sesion bridge viva, ya que el apply puede rotar el root bajo
+    # apps en curso. Solo certeza (socket + pid vivo): sin pidfile no se
+    # puede confirmar y se calla. Nunca falla (rc 0 siempre).
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || return 0
+    bridge_pid_alive "$(bridge_pid_path "$_bsock")" || return 0
+    msg "aviso: bridge activo ($_bsock): --apply puede rotar el root bajo apps en curso" >&2
+    return 0
 }
 ensure_bridge_daemon() { # arranca si no hay vivo (best-effort: nunca falla run)
     local bin sock pidf

@@ -94,6 +94,13 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     fi
     local -a off=() aur=() p
     for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
+    # Q4-H5: en L2 la parte AUR moriria tras aplicar la oficial (medio-
+    # estado: multilib+mesa instalados, AUR pendiente). Fallar antes de
+    # tocar nada (el dry-run ya volvio arriba).
+    level 2>/dev/null || true
+    if [[ "${_ARXY_LEVEL:-}" == 2 && "${#aur[@]}" -gt 0 ]]; then
+        die "arxy-gaming exige nivel 1 para su parte AUR (estas en nivel 2; nada aplicado)"
+    fi
     # makepkg prohibe root: la parte AUR se compila como usuario ANTES de
     # elevar (tras need_root ya es tarde). Con ARXY_GAMING_AUR_DONE la
     # re-ejecucion elevada la salta. Root-directo sin usuario que la haga:

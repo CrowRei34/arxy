@@ -57,6 +57,37 @@ bridge_resolve_allowlist() { # nombres -> paths absolutos (avisa y salta)
 bridge_token_new() { # 64 hex de /dev/urandom (del daemon, Commit 17 lo refina)
     head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' || true
 }
+bridge_env_l2() { # Q4-H7: L2 no pasa por run_in (exec ld-linux directo) y
+    # las apps perdian el bridge en silencio. Misma resolucion que run_in
+    # (incluido fallback P5-H10) pero con export (el path vale tal cual,
+    # sin namespace). Best-effort: sin socket vivo, silencio total.
+    [[ -z "${ARXY_NO_BRIDGE:-}" ]] || return 0
+    ensure_bridge_daemon || true
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-$(id -u).sock"
+    [[ -S "$_bsock" ]] || return 0
+    local _bpid
+    _bpid="$(bridge_pid_path "$_bsock")"
+    if [[ ! -f "$_bpid" ]] || bridge_pid_alive "$_bpid"; then
+        export ARXY_BRIDGE_SOCKET="$_bsock"
+        local _btok
+        _btok="$(cat "$(bridge_token_path "$_bsock")" 2>/dev/null || true)"
+        [[ -n "$_btok" ]] && export ARXY_BRIDGE_TOKEN="$_btok"
+    fi
+    return 0
+}
+bridge_session_notice() { # Q4-H6: para doctor --fix --apply (yMsgs): avisa
+    # si hay sesion bridge viva, ya que el apply puede rotar el root bajo
+    # apps en curso. Solo certeza (socket + pid vivo): sin pidfile no se
+    # puede confirmar y se calla. Nunca falla (rc 0 siempre).
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || return 0
+    bridge_pid_alive "$(bridge_pid_path "$_bsock")" || return 0
+    msg "aviso: bridge activo ($_bsock): --apply puede rotar el root bajo apps en curso" >&2
+    return 0
+}
 ensure_bridge_daemon() { # arranca si no hay vivo (best-effort: nunca falla run)
     local bin sock pidf
     bin="$(bridge_bin)" || return 0 # sin binario: silencio (estado normal)

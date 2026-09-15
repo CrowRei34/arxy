@@ -77,6 +77,13 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
 fi
 unset _frozen_val
 
+# Q6-H9: vacio no es "unset" (:- los confunde y DATA/BUILD/VFILE caerian
+# a rutas reales creyendo aislar). Tras ambos restores, vacio muere claro
+# (die aun no existe aqui: echo+exit con el mismo prefijo).
+if [[ -z "${ARXY_ROOT:-}" ]]; then
+    echo "arxy: error: ARXY_ROOT vacio (unset para usar el default)" >&2
+    exit 1
+fi
 # Derivados de ARXY_ROOT en UN solo punto, DESPUES de ambas restauraciones.
 # Antes se derivaba entre el primer _restore_frozen y el source del usuario
 # real: con sudo sin env y ARXY_ROOT en el conf del usuario real, ROOT
@@ -115,6 +122,7 @@ arxy_env_pass() { # imprime VAR=val por linea (valores: rutas/flags, sin \n)
     local v
     while IFS= read -r v; do
         [[ "$v" == ARXY_ARGV ]] && continue # array, no escalar
+        [[ "$v" == ARXY_LOCK_FD ]] && continue # fd local: el hijo debe tomar su propio lock
         printf '%s=%s\n' "$v" "${!v}"
     done < <(compgen -v | grep '^ARXY_' || true)
 }
@@ -151,6 +159,32 @@ _image_ok() { # <dir>: valida un rootfs (instalado o en staging)
     [[ -x "$1/usr/bin/bash" && -x "$1/usr/bin/pacman" && -f "$1/etc/arch-release" ]]
 }
 image_ok() { _image_ok "$ARXY_ROOT"; }
+
+# Lock advisory unico para ops con estado (Q4-H1: setup/rollback/gc-apply/
+# clean-apply/install/remove/update/doctor-apply corrian sin serializar;
+# dos setups peleaban por el unico slot .old con perdida silenciosa).
+# flock(1) no-bloqueante sobre ${ARXY_ROOT%/*}/.lock (== $ARXY_DATA/.lock en
+# produccion; no usar $ARXY_DATA directo: ver cuerpo): tomado, muere claro.
+# Reentrante en el mismo proceso (doctor --apply -> cmd_install comparten
+# el fd); el lock vive hasta el exit (cierre implicito). Tomar DESPUES de
+# need_root (el re-exec pierde fds... salvo heredados, y el padre-usuario
+# no debe bloquear). Fuera: fase AUR como usuario (dirs unicos por PID;
+# su fase privilegiada entra por cmd_install_file, que si lo toma).
+data_lock() {
+    [[ -n "${ARXY_LOCK_FD:-}" ]] && return 0 # ya tomado (anidado)
+    # OJO: derivar de ARXY_ROOT, NO de ARXY_DATA (los tests exportan ROOT
+    # tras sourcear y DATA queda rancio al default real: el lock caeria en
+    # /var/lib/arxy. En produccion son identicos: DATA="${ROOT%/*}").
+    local lf="${ARXY_ROOT%/*}/.lock"
+    mkdir -p "${ARXY_ROOT%/*}" 2>/dev/null || die "no pude crear ${ARXY_ROOT%/*} (¿permisos?)"
+    # OJO: este exec va PELADO (sin 2>/dev/null ni ||): cualquier redireccion
+    # extra persistiria en la shell (el stderr moria para siempre y los die
+    # salian mudos, cazado por T8). Si no se abre, bash muere con su error
+    # (caso ya roto: sin escritura en DATA no hay operacion posible).
+    exec {ARXY_LOCK_FD}>"$lf"
+    [[ -n "${ARXY_LOCK_FD:-}" ]] || die "no pude abrir lock $lf (¿permisos?)"
+    flock -n "$ARXY_LOCK_FD" 2>/dev/null || die "otra operacion arxy en curso (lock $lf); reintenta cuando termine"
+}
 
 # Sin tty (scripts, pipes) pacman no puede preguntar: confirmar solo.
 # Uso: nc_args <nombre-array>; luego "${arr[@]}".
@@ -256,7 +290,7 @@ run_in() {
             [[ -n "${_h:-}" && -n "${_g:-}" ]] || continue
             case "$_g" in /dev/*) b+=(--dev-bind "$_h" "$_g") ;; *) b+=(--ro-bind "$_h" "$_g") ;; esac
         done <<<"$_nvm"
-        local _k _ip _d _lp _gl _nfd
+        local _k _ip _d _lp _gl _nfd _cls
         while IFS=$'\t' read -r _k _ip; do
             [[ -n "${_k:-}" && -n "${_ip:-}" ]] || continue
             case "$_k" in
@@ -273,7 +307,12 @@ run_in() {
             # Sin library_path se monta tal cual (nada que redirigir).
             _lp="$(nvidia_icd_library "$_ip")"
             if [[ -n "$_lp" ]]; then
-                _gl="$(nvidia_guest_path "$(basename "$_lp")" 64)"
+                # Q1-H2: no asumir 64-bit (un ICD 32-bit reescrito a lib64
+                # rompe el loader 32 en silencio). elf_class decide; si es
+                # inclasificable (SONAME pelado), 64 como antes.
+                _cls="64"
+                [[ "$(elf_class "$_lp" 2>/dev/null || true)" == "32" ]] && _cls="32"
+                _gl="$(nvidia_guest_path "$(basename "$_lp")" "$_cls")"
                 [[ -n "$_gl" ]] || continue
                 exec {_nfd}< <(nvidia_icd_rewrite "$_ip" "$_gl") || continue
             else
@@ -667,6 +706,7 @@ sig_check_compat() { # die si pin + required (fail closed: required exige firma)
 }
 cmd_setup() {
     need_root
+    data_lock # Q4-H1: serializar ops con estado (slot .old unico)
     need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA"
@@ -776,14 +816,14 @@ cmd_setup() {
             printf '%s\n' "$_hg" >> "$stage/etc/group"
         fi
     fi
-    _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
+    _image_ok "$stage" || { rm -rf "${stage:?}"; die "imagen corrupta: sin bash/pacman/arch-release"; }
     [[ -z "$img_sha" ]] && img_sha="$ARXY_IMAGE_SHA256"
     # version DENTRO del staging: nace con la imagen y el rename la publica
     # junta — nunca hay root nuevo con version vieja ni al reves. El subshell
     # contiene el override (sin save/restore); die ahi sale del subshell.
-    mkdir -p "$stage/var/lib/arxy" || { rm -rf "$stage"; die "no pude registrar version en el staging"; }
+    mkdir -p "$stage/var/lib/arxy" || { rm -rf "${stage:?}"; die "no pude registrar version en el staging"; }
     ( export ARXY_VERSION_FILE="$stage/var/lib/arxy/version"
-      write_version "$ARXY_IMAGE_URL" "$img_sha" ) || { rm -rf "$stage"; die "no pude escribir version"; }
+      write_version "$ARXY_IMAGE_URL" "$img_sha" ) || { rm -rf "${stage:?}"; die "no pude escribir version"; }
     data_sync "$stage" "$ARXY_DATA"
     # rc para la shell de nivel 2: resuelve en el subsistema lo que el host
     # no conoce (rutas horneadas; se regenera en cada setup). Antes del
@@ -819,14 +859,14 @@ cmd_setup() {
     # Rotacion via .old.tmp.$$ : el rename publica imagen+version juntas
     # (atomico). Kill aqui deja .old.tmp.$$ y lo resuelve recover_staging.
     local old_tmp="$ARXY_ROOT.old.tmp.$$"
-    rm -rf "$old_tmp" 2>/dev/null || true
+    rm -rf "${old_tmp:?}" 2>/dev/null || true
     if [[ -d "$ARXY_ROOT" ]]; then
-        mv "$ARXY_ROOT" "$old_tmp" || { rm -rf "$stage"; die "no pude apartar la instalacion actual"; }
+        mv "$ARXY_ROOT" "$old_tmp" || { rm -rf "${stage:?}"; die "no pude apartar la instalacion actual"; }
     fi
     mv "$stage" "$ARXY_ROOT" || die "rotacion fallo (la anterior esta en $old_tmp; el proximo arranque la rescata)"
     data_sync "$ARXY_ROOT" "$ARXY_DATA"
     if [[ -d "$old_tmp" ]]; then
-        rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
+        rm -rf "${ARXY_ROOT:?}.old" 2>/dev/null || true
         mv "$old_tmp" "$ARXY_ROOT.old" || msg "aviso: no pude rotar $old_tmp a rollback (el proximo arranque lo rescata)" >&2
     fi
     data_sync "$ARXY_DATA"
@@ -843,6 +883,7 @@ cmd_setup() {
 # Restaura la imagen anterior guardada por setup (una generacion).
 cmd_rollback() {
     need_root
+    data_lock # Q4-H1
     [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
     if [[ -d "$ARXY_ROOT" ]]; then
         local aside="$ARXY_ROOT.swap.$$"
@@ -878,6 +919,7 @@ cmd_gc() { # [--json] [--apply [--yes]]
         esac
     done
     [[ -n "$apply" ]] && need_root
+    [[ -n "$apply" ]] && data_lock # Q4-H1: solo el apply muta (dry-run libre)
     local pkgdir="$ARXY_ROOT/var/cache/pacman/pkg"
     local old="$ARXY_ROOT.old"
     local old_present=false old_valid=false old_size=0
@@ -1055,6 +1097,13 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     fi
     local -a off=() aur=() p
     for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
+    # Q4-H5: en L2 la parte AUR moriria tras aplicar la oficial (medio-
+    # estado: multilib+mesa instalados, AUR pendiente). Fallar antes de
+    # tocar nada (el dry-run ya volvio arriba).
+    level 2>/dev/null || true
+    if [[ "${_ARXY_LEVEL:-}" == 2 && "${#aur[@]}" -gt 0 ]]; then
+        die "arxy-gaming exige nivel 1 para su parte AUR (estas en nivel 2; nada aplicado)"
+    fi
     # makepkg prohibe root: la parte AUR se compila como usuario ANTES de
     # elevar (tras need_root ya es tarde). Con ARXY_GAMING_AUR_DONE la
     # re-ejecucion elevada la salta. Root-directo sin usuario que la haga:
@@ -1114,17 +1163,25 @@ cmd_install() {
     fi
     need_root
     [[ $# -ge 1 ]] || die "uso: $PROG install <paquete...>  |  $PROG install --aur <paquete...>"
-    ensure_image
-    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
-    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
-    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    # Q6-H9/H11/H13: validar TODO el argv ANTES de root/red. Un "" o "my app"
+    # moria en pacman tras escalar y descargar (~130MB). gpu-amd|gpu-nvidia
+    # son virtuales fijos (siempre validos); el resto pasa check_pkg_name.
     local -a pkgs=()
+    local -a gpu_reqs=()
     local g
     for g in "$@"; do
         [[ "$g" == --dry-run ]] && die "--dry-run solo vale con arxy-gaming ('$PROG install arxy-gaming --dry-run')"
         [[ "$g" == -* ]] && die "opcion no soportada en install: '$g'"
-        case "$g" in gpu-amd|gpu-nvidia) cmd_gpu_stack "$g" ;; *) pkgs+=("$g") ;; esac
+        case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
+    need_root
+    data_lock # Q4-H1 (la fase AUR-usuario no lo toma: entra por __install-file)
+    ensure_image
+    # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
+    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
+    # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
+    local _gr
+    for _gr in ${gpu_reqs[@]+"${gpu_reqs[@]}"}; do cmd_gpu_stack "$_gr"; done
     [[ "${#pkgs[@]}" -gt 0 ]] || return 0
     local -a nc
     nc_args nc
@@ -1375,6 +1432,7 @@ SHIM
 cmd_install_file() {
     need_root
     [[ $# -eq 1 && -f "${1:-}" ]] || die "uso interno: $PROG __install-file <paquete.pkg.tar.zst>"
+    data_lock # Q4-H1: fase privilegiada del flujo AUR (corre como root)
     ensure_image
     local file="$1"
     [[ "$file" == "$ARXY_BUILD"/* ]] && file="$NS_BUILD${file#$ARXY_BUILD}"
@@ -1390,12 +1448,17 @@ cmd_install_file() {
 }
 
 cmd_remove() {
-    need_root
     [[ $# -ge 1 ]] || die "uso: $PROG remove <paquete...>"
+    # Q6-H9/H11: validar antes de root/red (igual que install).
+    local _r
+    for _r in "$@"; do
+        [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"
+        check_pkg_name "$_r"
+    done
+    need_root
+    data_lock # Q4-H1
     ensure_image
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
-    local _r
-    for _r in "$@"; do [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"; done
     local -a nc
     nc_args nc
     pacman_mut -Rns "${nc[@]}" "$@" || die "pacman fallo"
@@ -1411,6 +1474,7 @@ cmd_remove() {
 
 cmd_update() {
     need_root
+    data_lock # Q4-H1
     ensure_image
     local -a nc
     nc_args nc
@@ -1431,6 +1495,7 @@ cmd_clean() { # [--apply]
     [[ "${1:-}" == "--apply" ]] && apply=1
     [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
     [[ -z "${2:-}" ]] || die "uso: $PROG clean [--apply]"
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply borra .old (dry-run libre)
     local r p a d o f
     r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
     p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"
@@ -1509,7 +1574,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
     if [[ -n "$_trap_exit" ]]; then eval "$_trap_exit"; else trap - EXIT; fi
-    rm -rf "$work" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
+    rm -rf "${work:?}" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
     return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 
@@ -1646,8 +1711,13 @@ gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
     # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
     # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
     # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
+    # Q4-H5: NVIDIA pinneado al modulo del host (como arxy_gaming_pkgs);
+    # sin version legible se muere claro (un utils sin pin rompe el GL).
+    local ver=""
     case "$(detect_gpu || true)" in
-        nvidia) printf '%s\n' nvidia-utils lib32-nvidia-utils ;;
+        nvidia) ver="$(detect_nvidia_ver || true)"
+            [[ -n "$ver" ]] || die "NVIDIA sin version legible (¿nouveau?): nvidia-utils sin pin romperian el GL"
+            printf '%s\n' "nvidia-utils=$ver" "lib32-nvidia-utils=$ver" ;;
         amd) printf '%s\n' vulkan-radeon lib32-vulkan-radeon ;;
         *) printf '%s\n' vulkan-intel lib32-vulkan-intel ;;
     esac
@@ -1722,9 +1792,13 @@ desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
 # cmd_export <pkg | archivo.desktop | --all>
 cmd_export() {
     [[ $# -ge 1 ]] || die "uso: $PROG export <paquete | archivo.desktop | --all>"
-    ensure_image
     # Sin flags a run_pacman (P6-H2: -Qlq pasaria la opcion a pacman).
     [[ "$1" == -* && "$1" != --all ]] && die "opcion no soportada en export: '$1'"
+    # Q6-H11: el nombre de paquete se valida ANTES de ensure_image (un "a b"
+    # moria en pacman tras descargar; un "" daba "sin .desktop" rc 0).
+    # Rutas .desktop sí pueden llevar espacios: no se validan.
+    if [[ "$1" != --all && "$1" != *.desktop ]]; then check_pkg_name "$1"; fi
+    ensure_image
     local -a srcs=()
     if [[ "$1" == "--all" ]]; then
         mapfile -t srcs < <(find "$ARXY_ROOT/usr/share/applications" -maxdepth 1 -name '*.desktop' 2>/dev/null || true)
@@ -1966,6 +2040,7 @@ cmd_run() {
     resolve_target "$target" # sin $(): el subshell perderia RESOLVED_HOST
     target="$RESOLVED_TARGET"
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
+        bridge_env_l2 # Q4-H7: L2 tambien integra el host (socket+token)
         [[ -n "$RESOLVED_HOST" ]] && exec "$target" "$@" # binario del host: nativo
         case "$target" in "$ARXY_ROOT"/*) ;; *) target="$ARXY_ROOT$target" ;; esac
         level2_env
@@ -1979,6 +2054,7 @@ cmd_run() {
 # host no resuelve caen en command_not_found_handle (ver level2-rc de setup).
 cmd_shell_level2() {
     level2_env
+    bridge_env_l2 # Q4-H7: la shell L2 tambien ve el bridge
     export PS1="(arxy:2) \\u@\\h \\w\\$ "
     local rcfile="$ARXY_DATA/level2-rc"
     if [[ $# -ge 1 ]]; then
@@ -2162,7 +2238,7 @@ doctor_gpu() {
 # La usan el bloque de texto y el array "fixes" del JSON (una sola logica).
 # Razon/would_do nunca traen '|' (separador).
 fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
-    local nv inst lc dri g
+    local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
             if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
@@ -2197,7 +2273,11 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $(gpu_stack_pkgs | xargs)|"
+            # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
+            # nunca muere: fallback explicito.
+            _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
+            [[ -n "$_gsp" ]] || _gsp="nvidia-utils (version del host ilegible: instala a mano)"
+            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $_gsp|"
             ;;
         gpu-full-stack)
             g="$(detect_gpu || true)"
@@ -2268,6 +2348,10 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
     if [[ -n "$apply" && "$(id -u)" -ne 0 ]]; then
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
+    # Q4-H6: avisar si hay sesion bridge viva (el apply rota el root).
+    # Guarda command -v: tests que sourcean 60-hw sin 80-bridge no la tienen.
+    [[ -n "$apply" ]] && command -v bridge_session_notice >/dev/null 2>&1 && bridge_session_notice
     local fid out st reason would opt
     echo "fixes available: ${#FIX_IDS[@]}"
     for fid in "${FIX_IDS[@]}"; do
@@ -2279,7 +2363,8 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 echo "  [todo] $fid ($reason)"
                 [[ -n "$would" ]] && echo "         would_do: $would"
                 if [[ "$fid" == hold-mesa && -n "$apply" ]]; then
-                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null \
+                        && grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
                         echo "  [hecho] $fid aplicado"
                     else
                         echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
@@ -2289,11 +2374,18 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     echo "  [hecho] $fid aplicado (ver 'recuperado:' arriba)"
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
-                    mapfile -t _sp < <(gpu_stack_pkgs)
-                    if cmd_install "${_sp[@]}"; then
-                        echo "  [hecho] $fid aplicado"
+                    local _sout
+                    # Q4-H5: si la lista muere (NVIDIA ilegible), [fallo]
+                    # honesto ANTES de instalar nada (no medio-estado).
+                    if ! _sout="$(gpu_stack_pkgs)" || [[ -z "$_sout" ]]; then
+                        echo "  [fallo] $fid no se pudo aplicar (lista vacia o version ilegible)" >&2; fails=1
                     else
-                        echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        mapfile -t _sp <<<"$_sout"
+                        if cmd_install "${_sp[@]}"; then
+                            echo "  [hecho] $fid aplicado"
+                        else
+                            echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        fi
                     fi
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
@@ -2446,7 +2538,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
     _trap_return="$(trap -p RETURN || true)"
     trap 'rm -rf "${t:-}"' RETURN
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; rm -rf "$t"; return 0; }
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; [[ -n "$t" ]] && rm -rf "$t"; return 0; }; # Q2-H9: sin :? aqui (mktemp pudo fallar y hay que retornar 0, no morir); T12b lo permite solo en esta linea
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
@@ -2454,7 +2546,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
         echo 0
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
-    rm -rf "$t"
+    rm -rf "${t:?}"
     return 0
 }
 probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12
@@ -2726,6 +2818,37 @@ bridge_resolve_allowlist() { # nombres -> paths absolutos (avisa y salta)
 }
 bridge_token_new() { # 64 hex de /dev/urandom (del daemon, Commit 17 lo refina)
     head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' || true
+}
+bridge_env_l2() { # Q4-H7: L2 no pasa por run_in (exec ld-linux directo) y
+    # las apps perdian el bridge en silencio. Misma resolucion que run_in
+    # (incluido fallback P5-H10) pero con export (el path vale tal cual,
+    # sin namespace). Best-effort: sin socket vivo, silencio total.
+    [[ -z "${ARXY_NO_BRIDGE:-}" ]] || return 0
+    ensure_bridge_daemon || true
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-$(id -u).sock"
+    [[ -S "$_bsock" ]] || return 0
+    local _bpid
+    _bpid="$(bridge_pid_path "$_bsock")"
+    if [[ ! -f "$_bpid" ]] || bridge_pid_alive "$_bpid"; then
+        export ARXY_BRIDGE_SOCKET="$_bsock"
+        local _btok
+        _btok="$(cat "$(bridge_token_path "$_bsock")" 2>/dev/null || true)"
+        [[ -n "$_btok" ]] && export ARXY_BRIDGE_TOKEN="$_btok"
+    fi
+    return 0
+}
+bridge_session_notice() { # Q4-H6: para doctor --fix --apply (yMsgs): avisa
+    # si hay sesion bridge viva, ya que el apply puede rotar el root bajo
+    # apps en curso. Solo certeza (socket + pid vivo): sin pidfile no se
+    # puede confirmar y se calla. Nunca falla (rc 0 siempre).
+    local _bsock
+    _bsock="$(bridge_sock_path)"
+    [[ -S "$_bsock" ]] || return 0
+    bridge_pid_alive "$(bridge_pid_path "$_bsock")" || return 0
+    msg "aviso: bridge activo ($_bsock): --apply puede rotar el root bajo apps en curso" >&2
+    return 0
 }
 ensure_bridge_daemon() { # arranca si no hay vivo (best-effort: nunca falla run)
     local bin sock pidf

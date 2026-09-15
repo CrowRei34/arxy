@@ -195,7 +195,12 @@ mkdir -p "$D/drmA/card0/device" "$D/drmN/card0/device"
 printf '0x1002' > "$D/drmA/card0/device/vendor"
 printf '0x10de' > "$D/drmN/card0/device/vendor"
 g "stack amd" "vulkan-radeon lib32-vulkan-radeon" "$(ARXY_SYS_DRM_PATH="$D/drmA" gpu_stack_pkgs | xargs)"
-g "stack nvidia" "nvidia-utils lib32-nvidia-utils" "$(ARXY_SYS_DRM_PATH="$D/drmN" gpu_stack_pkgs | xargs)"
+# Q4-H5: NVIDIA pinneado al modulo del host (antes sin pin: mismatch silencioso).
+mkdir -p "$D/nvroot/proc/driver/nvidia"
+printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14\n' > "$D/nvroot/proc/driver/nvidia/version"
+g "stack nvidia pinneado" "nvidia-utils=550.54.14 lib32-nvidia-utils=550.54.14" "$(ARXY_SYS_DRM_PATH="$D/drmN" ARXY_SYS_ROOT="$D/nvroot" gpu_stack_pkgs | xargs)"
+(ARXY_SYS_DRM_PATH="$D/drmN" ARXY_SYS_ROOT="$D/emptyroot" gpu_stack_pkgs >/dev/null 2>&1)
+g "stack nvidia sin version muere claro" "1" "$?"
 g "stack sin discreta asume intel" "vulkan-intel lib32-vulkan-intel" "$(ARXY_SYS_DRM_PATH="$E/r" gpu_stack_pkgs | xargs)"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"

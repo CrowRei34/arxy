@@ -128,7 +128,7 @@ doctor_gpu() {
 # La usan el bloque de texto y el array "fixes" del JSON (una sola logica).
 # Razon/would_do nunca traen '|' (separador).
 fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
-    local nv inst lc dri g
+    local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
             if image_ok && is_mesa_mini && ! grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
@@ -163,7 +163,11 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $(gpu_stack_pkgs | xargs)|"
+            # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
+            # nunca muere: fallback explicito.
+            _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
+            [[ -n "$_gsp" ]] || _gsp="nvidia-utils (version del host ilegible: instala a mano)"
+            echo "todo|libc musl con GPU: el stack del host no sirve|instalar en rootfs: $_gsp|"
             ;;
         gpu-full-stack)
             g="$(detect_gpu || true)"
@@ -235,6 +239,9 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
     [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
+    # Q4-H6: avisar si hay sesion bridge viva (el apply rota el root).
+    # Guarda command -v: tests que sourcean 60-hw sin 80-bridge no la tienen.
+    [[ -n "$apply" ]] && command -v bridge_session_notice >/dev/null 2>&1 && bridge_session_notice
     local fid out st reason would opt
     echo "fixes available: ${#FIX_IDS[@]}"
     for fid in "${FIX_IDS[@]}"; do
@@ -257,11 +264,18 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     echo "  [hecho] $fid aplicado (ver 'recuperado:' arriba)"
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
-                    mapfile -t _sp < <(gpu_stack_pkgs)
-                    if cmd_install "${_sp[@]}"; then
-                        echo "  [hecho] $fid aplicado"
+                    local _sout
+                    # Q4-H5: si la lista muere (NVIDIA ilegible), [fallo]
+                    # honesto ANTES de instalar nada (no medio-estado).
+                    if ! _sout="$(gpu_stack_pkgs)" || [[ -z "$_sout" ]]; then
+                        echo "  [fallo] $fid no se pudo aplicar (lista vacia o version ilegible)" >&2; fails=1
                     else
-                        echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        mapfile -t _sp <<<"$_sout"
+                        if cmd_install "${_sp[@]}"; then
+                            echo "  [hecho] $fid aplicado"
+                        else
+                            echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1
+                        fi
                     fi
                 elif [[ -n "$apply" ]]; then
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"

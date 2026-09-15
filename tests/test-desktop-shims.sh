@@ -34,6 +34,36 @@ else
 fi
 grep -q 'ARXY_BRIDGE_SOCKET' "$REPO/lib/10-level.sh" && ok "run_in expone SOCKET" || no "run_in expone SOCKET"
 grep -q 'ARXY_BRIDGE_TOKEN' "$REPO/lib/10-level.sh" && ok "run_in expone TOKEN" || no "run_in expone TOKEN"
+# Q4-H6: aviso con sesion viva (pid con cmdline arxy-bridged via exec -a).
+if command -v python3 >/dev/null 2>&1; then
+    _bn="$(mktemp -d)"
+    python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.bind('$_bn/arxy-bridge.sock')" 2>/dev/null
+    ( exec -a arxy-bridged sleep 30 ) & _fpid=$!
+    printf '%s' "$_fpid" > "$_bn/arxy-bridge.pid"
+    _nout="$(XDG_RUNTIME_DIR="$_bn" bash -c '. "$0" >/dev/null 2>&1; . "$1" >/dev/null 2>&1; bridge_session_notice 2>&1' "$REPO/lib/00-head.sh" "$REPO/lib/80-bridge.sh" 2>&1)"
+    grep -q "bridge activo" <<<"$_nout" && ok "session_notice avisa con daemon vivo" || no "session_notice avisa" "$_nout"
+    kill "$_fpid" 2>/dev/null; wait "$_fpid" 2>/dev/null || true
+    _nout="$(XDG_RUNTIME_DIR="$_bn" bash -c '. "$0" >/dev/null 2>&1; . "$1" >/dev/null 2>&1; bridge_session_notice 2>&1; echo "rc=$?"' "$REPO/lib/00-head.sh" "$REPO/lib/80-bridge.sh" 2>&1)"
+    ! grep -q "bridge activo" <<<"$_nout" && grep -q "rc=0" <<<"$_nout" && ok "session_notice calla sin daemon" || no "session_notice calla" "$_nout"
+    rm -rf "$_bn"
+else
+    echo "SKIP: session_notice conductual (sin python3)"
+fi
+grep -q 'bridge_env_l2' "$REPO/lib/50-run.sh" && ok "L2 (run/shell) inyecta bridge" || no "L2 inyecta bridge"
+# Comportamiento con socket falso (python bindea y sale: el path queda
+# como socket huerfano; sin pidfile se confia, igual que foreground).
+if command -v python3 >/dev/null 2>&1; then
+    _bd="$(mktemp -d)"; trap 'rm -rf "$_bd"' EXIT
+    python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.bind('$_bd/arxy-bridge.sock')" 2>/dev/null
+    printf 'tok-falso' > "$_bd/arxy-bridge.token"
+    _env="$(XDG_RUNTIME_DIR="$_bd" ARXY_BRIDGE_BIN=/nonexistent bash -c '. "$0" >/dev/null 2>&1; . "$1" >/dev/null 2>&1; unset ARXY_BRIDGE_SOCKET ARXY_BRIDGE_TOKEN; bridge_env_l2; printf "SOCK=%s TOKEN=%s" "${ARXY_BRIDGE_SOCKET:-unset}" "${ARXY_BRIDGE_TOKEN:-unset}"' "$REPO/lib/00-head.sh" "$REPO/lib/80-bridge.sh" 2>&1)"
+    [[ "$_env" == "SOCK=$_bd/arxy-bridge.sock TOKEN=tok-falso" ]] && ok "bridge_env_l2 exporta con socket vivo" || no "bridge_env_l2 exporta" "$_env"
+    _env="$(XDG_RUNTIME_DIR="$_bd" ARXY_NO_BRIDGE=1 ARXY_BRIDGE_BIN=/nonexistent bash -c '. "$0" >/dev/null 2>&1; . "$1" >/dev/null 2>&1; unset ARXY_BRIDGE_SOCKET ARXY_BRIDGE_TOKEN; bridge_env_l2; printf "SOCK=%s" "${ARXY_BRIDGE_SOCKET:-unset}"' "$REPO/lib/00-head.sh" "$REPO/lib/80-bridge.sh" 2>&1)"
+    [[ "$_env" == "SOCK=unset" ]] && ok "bridge_env_l2 respeta NO_BRIDGE" || no "bridge_env_l2 NO_BRIDGE" "$_env"
+    rm -rf "$_bd"; trap - EXIT
+else
+    echo "SKIP: bridge_env_l2 conductual (sin python3)"
+fi
 for _t in T0 T16 T19; do
     # M11: en linea de codigo, no en comentario (mencion en comentario no es cobertura).
     if grep -n "\"$_t" "$REPO/tests/test-bridge-in-container.sh" | grep -qv '^[0-9]*:#'; then ok "e2e cubre $_t";

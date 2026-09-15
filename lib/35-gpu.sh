@@ -124,8 +124,13 @@ gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
     # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
     # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
     # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
+    # Q4-H5: NVIDIA pinneado al modulo del host (como arxy_gaming_pkgs);
+    # sin version legible se muere claro (un utils sin pin rompe el GL).
+    local ver=""
     case "$(detect_gpu || true)" in
-        nvidia) printf '%s\n' nvidia-utils lib32-nvidia-utils ;;
+        nvidia) ver="$(detect_nvidia_ver || true)"
+            [[ -n "$ver" ]] || die "NVIDIA sin version legible (¿nouveau?): nvidia-utils sin pin romperian el GL"
+            printf '%s\n' "nvidia-utils=$ver" "lib32-nvidia-utils=$ver" ;;
         amd) printf '%s\n' vulkan-radeon lib32-vulkan-radeon ;;
         *) printf '%s\n' vulkan-intel lib32-vulkan-intel ;;
     esac

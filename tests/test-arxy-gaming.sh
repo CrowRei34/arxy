@@ -13,6 +13,8 @@ HERE="$(dirname "$0")"
 . "$HERE/../lib/60-hw.sh" >/dev/null 2>&1
 # shellcheck source=../lib/30-package.sh
 . "$HERE/../lib/30-package.sh" >/dev/null 2>&1
+# shellcheck source=../lib/10-level.sh
+. "$HERE/../lib/10-level.sh" >/dev/null 2>&1 # level() para T15 (Q4-H5)
 
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
@@ -70,8 +72,8 @@ out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gam
 ! grep -qE "PACMAN_MUT|^AUR |GPUSTACK" <<<"$out" && grep -q "nada tocado (dry-run)" <<<"$out" && ok "T6 puro" || no "T6 puro"
 grep -q "^\[multilib\]" "$ARXY_ROOT/etc/pacman.conf" && no "T6 multilib intacto" || ok "T6 multilib intacto"
 
-echo "== T8: no-dry-run habilita multilib y parte oficial/AUR"
-out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"
+echo "== T8: no-dry-run habilita multilib y parte oficial/AUR (flujo L1)"
+out="$(ARXY_LEVEL=1 ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"
 grep -q "^\[multilib\]" "$ARXY_ROOT/etc/pacman.conf" && ok "T8 multilib" || no "T8 multilib"
 grep -q "PACMAN_MUT.*lib32-vulkan-radeon" <<<"$out" && ok "T8 oficial" || no "T8 oficial"
 grep -q "^AUR .*proton-ge-custom-bin" <<<"$out" && ok "T8 aur" || no "T8 aur"
@@ -81,8 +83,8 @@ is_mesa_mini() { return 0; }
 out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming --dry-run 2>&1)"
 grep -q "mesa-mini seria reemplazado" <<<"$out" && ok "T7 conflicto" || no "T7 conflicto"
 
-echo "== T9: orden AUR-antes-de-elevar (makepkg prohibe root)"
-out="$(ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"
+echo "== T9: orden AUR-antes-de-elevar (makepkg prohibe root; flujo L1)"
+out="$(ARXY_LEVEL=1 ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"
 aline="$(grep -n "^AUR " <<<"$out" | head -1 | cut -d: -f1)"
 pline="$(grep -n "PACMAN_MUT" <<<"$out" | head -1 | cut -d: -f1)"
 [[ -n "$aline" && -n "$pline" && "$aline" -lt "$pline" ]] && ok "T9 AUR antes que oficial" || no "T9 AUR antes que oficial"
@@ -124,6 +126,13 @@ out="$(cmd_install "my app" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T14 install con espacio muere claro" || no "T14 install espacio ($rc: $out)"
 out="$(cmd_remove "" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T14 remove vacio muere claro" || no "T14 remove vacio ($rc: $out)"
+
+echo "== T15: gaming en L2 muere antes de aplicar (Q4-H5)"
+# Sin esto la parte oficial aplicaba y la AUR abortaba (medio-estado).
+# _ARXY_LEVEL es memoizado por proceso: reset para que ARXY_LEVEL mande.
+unset _ARXY_LEVEL
+out="$(ARXY_LEVEL=2 ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"; rc=$?
+[[ $rc -ne 0 ]] && grep -q "nivel 1" <<<"$out" && ! grep -qE "PACMAN_MUT|^AUR |GPUSTACK" <<<"$out" && ok "T15 L2 muere limpio pre-apply" || no "T15 L2 ($rc: $out)"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
