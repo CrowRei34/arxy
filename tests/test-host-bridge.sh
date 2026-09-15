@@ -31,7 +31,7 @@ te() { # te <nombre> <grep> -- <cmd...> : debe FALLAR y el texto matchear
     else echo "FAIL: $name (sin [$want] en [$out])"; FAIL=$((FAIL+1)); fi
 }
 
-t "help" -- "$BIN" host-bridge --help
+t "help + uso" -- sh -c '"$0" host-bridge --help 2>/dev/null | grep -q "host-bridge \[--daemon"' "$BIN"
 te "status sin daemon" "inactivo" -- "$BIN" host-bridge --status --socket "$SOCK"
 # (sin allowlist: el default resuelve en este host; el caso vacio
 # determinista vive en T19 con ARXY_BRIDGE_ALLOWLIST imposible)
@@ -39,7 +39,7 @@ te "stop sin daemon" "sin daemon vivo" -- "$BIN" host-bridge --stop --socket "$S
 t "daemon arranca" -- "$BIN" host-bridge --daemon --socket "$SOCK" --allowed-cmd /bin/echo
 [[ -S "$SOCK" ]] && echo "PASS: socket existe" || { echo "FAIL: socket existe"; FAIL=$((FAIL+1)); }
 [[ -f "${SOCK%.sock}.pid" ]] && echo "PASS: pidfile existe" || { echo "FAIL: pidfile existe"; FAIL=$((FAIL+1)); }
-t "status con daemon" -- "$BIN" host-bridge --status --socket "$SOCK"
+t "status activo" -- sh -c '"$0" host-bridge --status --socket "$1" 2>/dev/null | grep -q "^activo:"' "$BIN" "$SOCK"
 te "doble daemon falla limpio" "ya corre" -- "$BIN" host-bridge --daemon --socket "$SOCK" --allowed-cmd /bin/echo
 t "stop" -- "$BIN" host-bridge --stop --socket "$SOCK"
 [[ ! -e "$SOCK" ]] && echo "PASS: socket borrado" || { echo "FAIL: socket borrado"; FAIL=$((FAIL+1)); }

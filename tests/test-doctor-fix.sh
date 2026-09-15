@@ -19,7 +19,7 @@ t() { # t <nombre> -- <cmd...>
     else rc=$?; echo "FAIL($rc): $name"; printf '%s\n' "$out" | head -6 | sed 's/^/  /'; FAIL=$((FAIL+1)); fi
 }
 
-t "fix informa rc 0" -- sh -c '"$0" doctor --fix >/dev/null' "$BIN"
+t "fix informa rc 0 + contenido" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes available:"' "$BIN"
 t "fix lista 5" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes available: 5"' "$BIN"
 t "fix lista staging-cleanup" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "staging-cleanup"' "$BIN"
 t "fix hint sin aplicar" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "repite con --apply"' "$BIN"

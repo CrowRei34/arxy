@@ -32,10 +32,11 @@ cp -f "$SRC_IMG" "$D/image.tar.zst" || exit 1
 export ARXY_IMAGE_URL="file://$D/image.tar.zst"
 
 t "setup aislado" -- "$BIN" setup
+t "setup deja root valido" -- test -x "$R/usr/bin/bash"
 sed -i '/^IgnorePkg.*mesa/d' "$R/etc/pacman.conf"
 t "info ve todo hold-mesa" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "\[todo\] hold-mesa"' "$BIN"
 t "apply restaura hold" -- sh -c '"$0" doctor --fix --apply >/dev/null 2>&1 && grep -q "^IgnorePkg.*mesa" "$1/etc/pacman.conf"' "$BIN" "$R"
-t "apply informa rc 0" -- "$BIN" doctor --fix
+t "apply informa rc 0 + contenido" -- sh -c '"$0" doctor --fix 2>/dev/null | grep -q "fixes available:"' "$BIN"
 touch "$R/var/lib/pacman/db.lck"
 t "stale lock sobrevive sin --confirm" -- sh -c '"$0" doctor --fix --apply >/dev/null 2>&1; test -f "$1/var/lib/pacman/db.lck"' "$BIN" "$R"
 rm -f "$R/var/lib/pacman/db.lck"
