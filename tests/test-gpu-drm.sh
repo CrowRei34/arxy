@@ -78,8 +78,14 @@ out="$(ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_L
 grep -qE "^64[[:space:]]+.*libcuda" <<<"$out" && echo "PASS: libs libcuda 64" || { echo "FAIL: libs libcuda 64"; FAIL=$((FAIL+1)); }
 grep -q "libGLESv2" <<<"$out" && { echo "FAIL: libs mesa excluida"; FAIL=$((FAIL+1)); } || echo "PASS: libs mesa excluida"
 grep -q "libnvidia-glcore" <<<"$out" && echo "PASS: libs lib32 detectada" || { echo "FAIL: libs lib32"; FAIL=$((FAIL+1)); }
-nvidia_libs >/dev/null 2>&1
+out="$(nvidia_libs 2>/dev/null)"
 [[ $? -eq 0 ]] && echo "PASS: libs sin mock no falla" || { echo "FAIL: libs sin mock rc"; FAIL=$((FAIL+1)); }
+# M9: invariante de contenido (no solo rc): con libs en host, no vacio; sin ellas, vacio+rc0 valido.
+if ls /usr/lib64/libcuda* /usr/lib/libcuda* /usr/lib/x86_64-linux-gnu/libcuda* >/dev/null 2>&1; then
+    [[ -n "$out" ]] && echo "PASS: libs host no vacio" || { echo "FAIL: libs host vacio con NVIDIA"; FAIL=$((FAIL+1)); }
+else
+    [[ -z "$out" ]] && echo "PASS: libs host vacio sin NVIDIA" || { echo "FAIL: libs host no vacio sin NVIDIA"; FAIL=$((FAIL+1)); }
+fi
 
 echo "== nvidia_icds + rewrite"
 V="$D/icd"; mkdir -p "$V/vk" "$V/egl"
@@ -106,8 +112,14 @@ out="$(ARXY_NVIDIA_LIB_ROOT="$M/r" ARXY_NVIDIA_LIB_ROOT64="$M/r64" ARXY_NVIDIA_L
 grep -q "libcuda.*arxy-nvidia" <<<"$out" && echo "PASS: mounts lib" || { echo "FAIL: mounts lib"; FAIL=$((FAIL+1)); }
 grep -q "nvidia_icd.json.*/usr/share/vulkan/icd.d/nvidia_icd.json" <<<"$out" && echo "PASS: mounts icd" || { echo "FAIL: mounts icd"; FAIL=$((FAIL+1)); }
 grep -q "nvidia0.*nvidia0" <<<"$out" && echo "PASS: mounts device identidad" || { echo "FAIL: mounts device"; FAIL=$((FAIL+1)); }
-nvidia_mounts >/dev/null 2>&1
+out="$(nvidia_mounts 2>/dev/null)"
 [[ $? -eq 0 ]] && echo "PASS: mounts sin mock no falla" || { echo "FAIL: mounts sin mock rc"; FAIL=$((FAIL+1)); }
+# M9: idem mounts: con /dev/nvidia* en host, no vacio; sin ellos, vacio OK.
+if ls /dev/nvidia* >/dev/null 2>&1; then
+    [[ -n "$out" ]] && echo "PASS: mounts host no vacio" || { echo "FAIL: mounts host vacio con NVIDIA"; FAIL=$((FAIL+1)); }
+else
+    [[ -z "$out" ]] && echo "PASS: mounts host vacio sin NVIDIA" || { echo "FAIL: mounts host no vacio sin NVIDIA"; FAIL=$((FAIL+1)); }
+fi
 
 echo "== rewrite con espacios y & (sustitucion literal, no sed)"
 printf '{ "ICD": { "library_path": "/usr/lib/con espacios/lib&A_nvidia.so.0" } }\n' > "$V/vk/esp.json"
