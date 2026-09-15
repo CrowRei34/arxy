@@ -170,6 +170,10 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
    `detect_libc` (patrón `ARXY_SYS_DRM_PATH`) y cubrir AMBOS casos
    ← Commit 11/bc7c844: 7 fallos pre-existentes solo visibles en musl;
    la suite mentía en verde en glibc.
+10. Suites en secuencia, nunca en paralelo: los tests con daemon
+    (bridge) flaquean por contención (`test-bridge-deferral.sh` falló
+    1 vez junto al test DESTDIR, 4/4 verde en secuencia)
+    ← Commit 20: clasificado como flake ambiental.
 
 **Cobertura pendiente post-v1.0.0:** la matrix no ejercita `export`
 bajo L2 ni instala paquetes con `.desktop` en L2. El caso se validó
