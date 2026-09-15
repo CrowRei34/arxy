@@ -30,6 +30,11 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   `lint.yml` inválido desde Fase 1 solo se vio al primer push.
   Release: checksum verificado contra el asset + bump de template en
   z-packages + dispatch del autobuild + `xbps-query -Rs` tras Pages.
+- Bump de versión (3 sitios, en este orden): `ARXY_VERSION` en
+  `lib/00-head.sh` (+ `make sync`) → `version` en
+  `packaging/void/arxy/template` → `version`+`checksum` en
+  `z-packages/srcpkgs/arxy/template` (vía API, tras el release de GitHub).
+  No derivar del tag (rompería `make sync` offline).
 - Transición manual→paquete: si arxy se instaló a mano, borrar
   `/usr/local/bin/arxy*` y `/usr/local/lib/arxy/` antes del paquete
   (hacen shadow por PATH y resucitan bugs viejos: EPERM pre-Commit-18).
