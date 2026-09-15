@@ -18,6 +18,8 @@ desk_field() { grep -m1 -E "^$2=" "$1" | cut -d= -f2-; }
 cmd_export() {
     [[ $# -ge 1 ]] || die "uso: $PROG export <paquete | archivo.desktop | --all>"
     ensure_image
+    # Sin flags a run_pacman (P6-H2: -Qlq pasaria la opcion a pacman).
+    [[ "$1" == -* && "$1" != --all ]] && die "opcion no soportada en export: '$1'"
     local -a srcs=()
     if [[ "$1" == "--all" ]]; then
         mapfile -t srcs < <(find "$ARXY_ROOT/usr/share/applications" -maxdepth 1 -name '*.desktop' 2>/dev/null || true)
