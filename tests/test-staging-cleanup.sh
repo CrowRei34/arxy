@@ -102,5 +102,21 @@ else
 fi
 clean
 
+echo "== T9: rm falla -> aviso a stderr, rc 0 (A1)"
+clean; mkroot "$R" bueno; mkdir -p "$R.new.111"
+rm() { return 1; }
+out="$(recover_staging 2>&1)"; rc=$?
+unset -f rm
+[[ $rc -eq 0 ]] && grep -q "aviso: no pude recuperar $R.new.111" <<<"$out" && ok "T9 aviso + rc 0" || no "T9 aviso + rc 0"
+[[ -e "$R.new.111" ]] && ok "T9 huerfano sigue (no se mintio borrado)" || no "T9 huerfano sigue (no se mintio borrado)"
+
+echo "== T10: mv falla -> aviso a stderr, rc 0 (A1)"
+clean; mkroot "$R.new.222" nuevo
+mv() { return 1; }
+out="$(recover_staging 2>&1)"; rc=$?
+unset -f mv
+[[ $rc -eq 0 ]] && grep -q "aviso: no pude recuperar $R.new.222" <<<"$out" && ok "T10 aviso + rc 0" || no "T10 aviso + rc 0"
+clean
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
