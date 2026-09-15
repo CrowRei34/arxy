@@ -79,14 +79,14 @@ recover_staging() { # aplica staging_inventory; log a stderr; rc 0 siempre
     while IFS=$'\t' read -r acc path; do
         [[ -n "${path:-}" ]] || continue
         case "$acc" in
-            remove) if rm -rf "$path" 2>/dev/null; then msg "recovered: huerfano borrado from $path" >&2;
+            remove) if rm -rf "${path:?}" 2>/dev/null; then msg "recovered: huerfano borrado from $path" >&2;
                 else msg "aviso: no pude recuperar $path (huerfano no borrado)" >&2; fi ;;
             recover-root) if mv "$path" "$R" 2>/dev/null; then msg "recovered: root restaurado from $path" >&2;
                 else msg "aviso: no pude recuperar $path (root no restaurado)" >&2; fi ;;
-            replace-root) rm -rf "$R" 2>/dev/null || msg "aviso: no pude borrar root invalido $R" >&2
+            replace-root) rm -rf "${R:?}" 2>/dev/null || msg "aviso: no pude borrar root invalido $R" >&2
                 if mv "$path" "$R" 2>/dev/null; then msg "recovered: root invalido reemplazado from $path" >&2;
                 else msg "aviso: no pude recuperar $path (root invalido no reemplazado)" >&2; fi ;;
-            rotate-old) rm -rf "$R.old" 2>/dev/null || msg "aviso: no pude borrar $R.old" >&2
+            rotate-old) rm -rf "${R:?}.old" 2>/dev/null || msg "aviso: no pude borrar $R.old" >&2
                 if mv "$path" "$R.old" 2>/dev/null; then msg "recovered: rotado a .old from $path" >&2;
                 else msg "aviso: no pude recuperar $path (no rotado a .old)" >&2; fi ;;
         esac
@@ -266,12 +266,12 @@ cmd_setup() {
     # Extraer a staging y validar ANTES de tocar lo instalado: setup atomico.
     # Si algo falla aqui, la instalacion actual sigue intacta.
     local stage="$ARXY_ROOT.new.$$"
-    rm -rf "$stage"
+    rm -rf "${stage:?}"
     mkdir -p "$stage" || die "no pude crear staging en $stage (¿~1GB libre?)"
     msg "extrayendo en $stage..."
     if ! tar -xpf "$tmp" -C "$stage" 2>/dev/null; then
         # busybox-tar sin soporte zstd: descomprimir con zstd primero
-        zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "$stage"; die "extraccion fallo"; }
+        zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "${stage:?}"; die "extraccion fallo"; }
     fi
     rm -f "$tmp" "$sha_tmp" "$sig_tmp"
     trap - EXIT

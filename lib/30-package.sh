@@ -247,10 +247,15 @@ ensure_aur_env() {
 # Imprime la ruta del .pkg.tar.zst resultante (en el host).
 # OJO: todo el ruido del build va a stderr; por stdout SOLO la ruta final,
 # porque el llamador captura con f="$(aur_build ...)" (un subshell).
+check_pkg_name() { # <pkg> : charset Arch ([a-z0-9@._+-], mayusculas toleradas); muere si trae / o vacio (A3: el rm -rf de aur_build no debe salir del dir AUR)
+    local pkg="${1:-}"
+    [[ "$pkg" =~ ^[A-Za-z0-9@._+-]+$ ]] || die "nombre de paquete invalido: '$pkg'"
+}
 aur_build() { # <pkg> -> ruta paquete construido
     local pkg="$1" f
+    check_pkg_name "$pkg"
     local work_host="$ARXY_BUILD/aur/$pkg" work_ns="$NS_BUILD/aur/$pkg"
-    rm -rf "$work_host"
+    rm -rf "${work_host:?}"
     mkdir -p "$ARXY_BUILD/aur" || die "no puedo escribir en $ARXY_BUILD"
     # OJO: dentro del namespace solo existe la ruta $work_ns ($work_host es del host).
     if [[ -n "${HAVE_PARU:-}" ]]; then

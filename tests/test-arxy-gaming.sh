@@ -91,5 +91,14 @@ echo "== T10: musl dry-run lista igual + avisa devices"
 out="$(ARXY_LIB_DIR="$D/musllib" ARXY_LIB64_DIR="$D/musllib64" ARXY_SYS_DRM_PATH="$D/drmA" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming --dry-run 2>&1)"
 grep -q "vulkan-radeon" <<<"$out" && grep -q "solo devices del host" <<<"$out" && ok "T10 musl" || no "T10 musl"
 
+echo "== T11: check_pkg_name acepta charset Arch, rechaza / .. vacio (A3)"
+check_pkg_name "steam" 2>/dev/null && check_pkg_name "proton-ge-custom-bin" 2>/dev/null && ok "T11 validos" || no "T11 validos"
+bad=0
+for p in "../x" "/etc" "" "a b" 'a;b' 'a$(x)'; do (check_pkg_name "$p" >/dev/null 2>&1) && bad=$((bad+1)); done
+[[ $bad -eq 0 ]] && ok "T11 invalidos mueren" || no "T11 invalidos mueren ($bad pasaron)"
+
+echo "== T12: rm -rf destructivos llevan :? (tripwire A3)"
+grep -q 'rm -rf "${R:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${R:?}.old"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${stage:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${work_host:?}"' "$HERE/../lib/30-package.sh" && ok "T12 :? presente" || no "T12 :? presente"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
