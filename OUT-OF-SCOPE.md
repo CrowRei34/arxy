@@ -26,10 +26,12 @@ escrituras via chroot con sudo) pero exige root para instalar.
 
 ## 4. ICDs Vulkan de 32-bit
 
-Desde Commit 11: `run_in` solo monta el manifiesto 64-bit reescrito
-(`ponytail:` en `lib/35-gpu.sh`). Apps puras de 32-bit que busquen su
-propio ICD pueden fallar. Upgrade: segundo manifiesto + loader 32-bit
-cuando un caso real lo pida.
+Desde Commit 11: `run_in` reescribe el manifiesto al guest segun su
+clase real (`elf_class`; Q1-H2: antes asumia 64-bit y un ICD 32-bit
+caia en `lib64`). El loader Vulkan de 32-bit sigue sin soporte en el
+rootfs, asi que apps puras de 32-bit que busquen su propio ICD pueden
+fallar igual. Upgrade: segundo manifiesto + loader 32-bit cuando un
+caso real lo pida.
 
 ## 5. DDX Xorg anidado
 

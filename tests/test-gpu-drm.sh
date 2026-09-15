@@ -169,6 +169,16 @@ dline="$(grep -n -- '--dir' "$REC" | head -1 | cut -d: -f1)"; bline="$(grep -n "
 grep -q "FDCONTENT /usr/share/vulkan/icd.d/nvidia_icd.json" "$REC" && echo "PASS: run_in icd ro-bind-data" || { echo "FAIL: run_in icd ro-bind-data"; FAIL=$((FAIL+1)); }
 grep -q '"/usr/lib/arxy-nvidia/lib64/libGLX_nvidia.so.0"' "$REC" && echo "PASS: run_in icd reescrito en FD" || { echo "FAIL: run_in icd contenido FD"; FAIL=$((FAIL+1)); }
 grep -q '"/usr/lib/libGLX_nvidia.so.0"' "$REC" && { echo "FAIL: run_in icd path viejo en FD"; FAIL=$((FAIL+1)); } || echo "PASS: run_in icd sin path viejo"
+# Q1-H2: un ICD 32-bit no debe reescribirse a lib64 (rompia el loader 32
+# en silencio). file stubbed a 32-bit => determinista sin ELF real.
+echo "== run_in ICD 32-bit reescribe a lib32"
+V32="$D/icd32"; mkdir -p "$V32/vk"
+printf '{\n "file_format_version": "1.0.0",\n "ICD": { "library_path": "/usr/lib32/libGLX_nvidia.so.0" }\n}\n' > "$V32/vk/nvidia_icd32.json"
+file() { echo "foo ELF 32-bit LSB shared object"; }
+( PATH="$FB:$PATH" BWRAP_RECORD="$REC" ARXY_LIB_DIR="$D/glibclib" ARXY_LIB64_DIR="$D/glibclib64" ARXY_NVIDIA_LIB_ROOT="$E/r" ARXY_NVIDIA_LIB_ROOT64="$E/r64" ARXY_NVIDIA_LIB_ROOT32="$E/r32" ARXY_VULKAN_ICD_PATH="$V32/vk" ARXY_EGL_PLATFORM_PATH="$E/r" ARXY_DEV_PATH="$MD" run_in -- /bin/true ) >/dev/null 2>&1
+unset -f file
+grep -q '"/usr/lib/arxy-nvidia/lib32/libGLX_nvidia.so.0"' "$REC" && echo "PASS: run_in icd32 a lib32" || { echo "FAIL: run_in icd32 a lib32"; FAIL=$((FAIL+1)); }
+grep -q 'lib64/libGLX_nvidia' "$REC" && { echo "FAIL: run_in icd32 fugo a lib64"; FAIL=$((FAIL+1)); } || echo "PASS: run_in icd32 sin lib64"
 
 echo "== musl: sin userspace del host (solo devices de la base)"
 mkdir -p "$D/musllib" "$D/musllib64"

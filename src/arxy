@@ -256,7 +256,7 @@ run_in() {
             [[ -n "${_h:-}" && -n "${_g:-}" ]] || continue
             case "$_g" in /dev/*) b+=(--dev-bind "$_h" "$_g") ;; *) b+=(--ro-bind "$_h" "$_g") ;; esac
         done <<<"$_nvm"
-        local _k _ip _d _lp _gl _nfd
+        local _k _ip _d _lp _gl _nfd _cls
         while IFS=$'\t' read -r _k _ip; do
             [[ -n "${_k:-}" && -n "${_ip:-}" ]] || continue
             case "$_k" in
@@ -273,7 +273,12 @@ run_in() {
             # Sin library_path se monta tal cual (nada que redirigir).
             _lp="$(nvidia_icd_library "$_ip")"
             if [[ -n "$_lp" ]]; then
-                _gl="$(nvidia_guest_path "$(basename "$_lp")" 64)"
+                # Q1-H2: no asumir 64-bit (un ICD 32-bit reescrito a lib64
+                # rompe el loader 32 en silencio). elf_class decide; si es
+                # inclasificable (SONAME pelado), 64 como antes.
+                _cls="64"
+                [[ "$(elf_class "$_lp" 2>/dev/null || true)" == "32" ]] && _cls="32"
+                _gl="$(nvidia_guest_path "$(basename "$_lp")" "$_cls")"
                 [[ -n "$_gl" ]] || continue
                 exec {_nfd}< <(nvidia_icd_rewrite "$_ip" "$_gl") || continue
             else
