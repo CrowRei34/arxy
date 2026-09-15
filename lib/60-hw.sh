@@ -407,17 +407,20 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
     # El mount vive en el ns muerto del unshare: nunca cuelga en el host.
     # El RETURN trap cubre la muerte a mitad (solo queda un dir en /tmp).
     command -v unshare >/dev/null 2>&1 || { echo 0; return 0; }
-    local t
+    local t _trap_return
     t="$(mktemp -d 2>/dev/null || true)"
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
-    trap 'rm -rf "$t"' RETURN
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; return 0; }
+    _trap_return="$(trap -p RETURN || true)"
+    trap 'rm -rf "${t:-}"' RETURN
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; rm -rf "$t"; return 0; }
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
     else
         echo 0
     fi
+    if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
+    rm -rf "$t"
     return 0
 }
 probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12

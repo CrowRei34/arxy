@@ -490,6 +490,8 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     local start=$SECONDS saved=0 linked=0
     local work=""
     work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX" 2>/dev/null)" || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)"; return 0; }
+    local _trap_return _trap_exit
+    _trap_return="$(trap -p RETURN || true)"; _trap_exit="$(trap -p EXIT || true)"
     trap '[[ -n "${work:-}" ]] && rm -rf "$work"' RETURN EXIT
     # cksum POSIX (stat -c no existe en BSD, find -printf no existe en busybox):
     # CRC+tamaño en una pasada; sha256 solo confirma candidatos.
@@ -522,6 +524,9 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     else
         msg "dedup: $linked archivos linkeados, ${mb} MB ahorrados en $((SECONDS - start))s"
     fi
+    if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
+    if [[ -n "$_trap_exit" ]]; then eval "$_trap_exit"; else trap - EXIT; fi
+    rm -rf "$work" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
     return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 
