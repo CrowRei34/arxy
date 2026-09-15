@@ -11,9 +11,18 @@ arxy install --aur spotify       # AUR precompilado (-bin)
 arxy run rar x archivo.rar       # CLI dentro del subsistema
 ```
 
-## Instalación
+## Instalación (camino feliz 1-2-3)
 
-**Void Linux** (desde z-repo):
+1. Clona e instala (cualquier distro; no hay `curl | bash`: el
+   instalador necesita el layout del repo):
+
+```bash
+git clone https://github.com/SrDicov/arxy && cd arxy   # necesitas `git`
+sudo ./install.sh              # a /usr/local (arxy + axy; si ya eres root, omite `sudo`)
+sudo arxy setup                # descarga la imagen y listo
+```
+
+**Void Linux** (desde z-repo, alternativa al paso 2):
 
 ```bash
 echo "repository=https://srdicov.github.io/z-repo/x86_64" | sudo tee /etc/xbps.d/20-zrepo.conf
@@ -24,14 +33,11 @@ sudo xbps-install -y arxy
 En Void musl usa `.../z-repo/x86_64-musl`. Empaquetado manual: copiar
 `packaging/void/arxy/` a `void-packages/srcpkgs/` y `xbps-src pkg arxy`.
 
-**Cualquier distro** (clonar + instalar; no hay `curl | bash`: el
-instalador necesita el layout del repo):
-
-```bash
-git clone https://github.com/SrDicov/arxy && cd arxy   # necesitas `git`
-sudo ./install.sh              # a /usr/local (arxy + axy; si ya eres root, omite `sudo`)
-sudo arxy setup                # descarga la imagen y listo
-```
+Opciones del instalador (`install.sh --help`): `PREFIX=` (default
+`/usr/local`), `DESTDIR=` (staging para empaquetar), `--without-bridge`
+(omite el daemon; equivale al paquete xbps, que aún no lo incluye).
+Con bridge hace falta el binario compilado (`make bridge` antes de
+instalar); `sudo arxy setup` escribe `/var/lib/arxy` (necesita root).
 
 Imagen local (probar un build propio): `ARXY_IMAGE_URL=file:///ruta/al.tar.zst`
 (nota: `file://` no acepta espacios en la ruta). Instalación por pipe
@@ -39,6 +45,45 @@ Imagen local (probar un build propio): `ARXY_IMAGE_URL=file:///ruta/al.tar.zst`
 
 Requisitos del host: `bash bwrap curl tar zstd xz gzip file` +
 `bash>=4.4`. Comprobar: `arxy doctor`.
+
+## Uso
+
+| Comando | Qué hace |
+|---|---|
+| `arxy install <pkg...>` / `--aur` | instala (oficial / AUR `-bin`) + crea launcher (`Exec=arxy run …`, directo, sin wrappers). Pide sudo; si falta la imagen la descarga (~130MB); launcher en `~/.local/share/applications/` |
+| `arxy remove <pkg...>` | desinstala y borra su launcher |
+| `arxy run <bin> [args]` | ejecuta algo dentro del subsistema |
+| `arxy which <bin>` | dónde se resolvería ([subsistema] o [host]) |
+| `arxy shell` | shell interactiva dentro de Arch |
+| `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
+| `arxy export --all` | regenerar lanzadores del menú |
+| `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo |
+| `arxy quickstart` | te dice el siguiente paso según estado |
+| `arxy dedup` | hardlinkea idénticos de `/usr` (auto tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
+| `axy` | alias corto de `arxy` |
+| `arxy install arxy-gaming [--dry-run]` | stack gaming segun GPU (rewrite a `arxy-gaming-<vendor>`; la parte AUR se compila como usuario). ¿Steam? ver § Steam end-to-end. Requiere L1; AUR aún draft |
+| `arxy host-bridge [--daemon\|--stop\|--status]` | daemon host-bridge (Fase 5; notificaciones/links del sandbox al host) |
+
+Si algo falla: `arxy doctor` → `arxy doctor --fix` → `arxy quickstart`.
+
+```bash
+arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
+# {"nivel": 1, "libc": "glibc", "gpu": "intel"}  (format: 1, estable)
+```
+
+`arxy doctor --fix` informa y propone sin aplicar nada; con `--apply`
+(root) aplica no-destructivos; `--apply --confirm` + tty para destructivos
+(hoy: `db.lck` stale). `--json` nunca aplica: solo lista
+`fixes_available`/`fixes` (`nvidia-align`, `musl-glibc-stack` y
+`gpu-full-stack` proponen; instalar es opt-in futuro).
+
+`setup` persiste ese perfil en `/var/lib/arxy/hardware.json` (caché,
+`format: 1`, atómico y solo-si-cambia): `version --verbose` lo lee y avisa
+si el kernel o nvidia cambiaron; `doctor --json` siempre calcula fresco.
+Refrescar sin `setup`, pendiente.
+
+Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
+(usuario); todo admite override por variable de entorno (`ARXY_*`).
 
 ## Arquitectura: 2 niveles
 
@@ -78,50 +123,13 @@ re-ejecuta con `sudo`.
 - `arxy rollback` restaura el rootfs al setup anterior (se pierde lo
   instalado después). `arxy clean --apply` borra cachés y el rollback.
 - Dedup por hardlinks en `/usr`: pacman reemplaza (no escribe in-place),
-  el link se rompe solo. Fuera de `/usr` no se linkea.
-
-## Uso
-
-| Comando | Qué hace |
-|---|---|
-| `arxy install <pkg...>` / `--aur` | instala (oficial / AUR `-bin`) + crea launcher (`Exec=arxy run …`, directo, sin wrappers) |
-| `arxy remove <pkg...>` | desinstala y borra su launcher |
-| `arxy run <bin> [args]` | ejecuta algo dentro del subsistema |
-| `arxy which <bin>` | dónde se resolvería ([subsistema] o [host]) |
-| `arxy shell` | shell interactiva dentro de Arch |
-| `arxy search/info/list/update` | buscar, detalle, instalados, actualizar todo |
-| `arxy export --all` | regenerar lanzadores del menú |
-| `arxy setup / doctor` | (re)descargar imagen (atómico, con rollback) / chequeo |
-| `arxy quickstart` | te dice el siguiente paso según estado |
-| `arxy dedup` | hardlinkea idénticos de `/usr` (auto tras `install`/`update` si ahorra ≥10 MB; opt-out `ARXY_NO_AUTO_DEDUP=1`) |
-| `axy` | alias corto de `arxy` |
-| `arxy install arxy-gaming [--dry-run]` | stack gaming segun GPU (rewrite a `arxy-gaming-<vendor>`; la parte AUR se compila como usuario) |
-| `arxy host-bridge [--daemon\|--stop\|--status]` | daemon host-bridge (Fase 5; notificaciones/links del sandbox al host) |
-
-```bash
-arxy doctor --json | jq '{nivel: .level, libc: .libc.kind, gpu: .gpu.vendor}'
-# {"nivel": 1, "libc": "glibc", "gpu": "intel"}  (format: 1, estable)
-```
-
-`arxy doctor --fix` informa y propone sin aplicar nada; con `--apply`
-(root) aplica no-destructivos; `--apply --confirm` + tty para destructivos
-(hoy: `db.lck` stale). `--json` nunca aplica: solo lista
-`fixes_available`/`fixes` (`nvidia-align`, `musl-glibc-stack` y
-`gpu-full-stack` proponen; instalar es opt-in futuro).
-
-`setup` persiste ese perfil en `/var/lib/arxy/hardware.json` (caché,
-`format: 1`, atómico y solo-si-cambia): `version --verbose` lo lee y avisa
-si el kernel o nvidia cambiaron; `doctor --json` siempre calcula fresco.
-Refrescar sin `setup`, pendiente.
-
-Configuración: `/etc/arxy/arxy.conf` (sistema) y `~/.config/arxy/config`
-(usuario); todo admite override por variable de entorno (`ARXY_*`).
+   el link se rompe solo. Fuera de `/usr` no se linkea.
 
 ## Validación
 
 - **Matrix en 5 distros** (Alpine, Chimera, Void, Ubuntu,
   Ubuntu-privilegiado): `arxy-image/tests/matrix.sh` — assertions de
-   contenido, no solo rc (29–34 checks según nivel y flags: rama libc,
+   contenido, no solo rc (33–43 checks según nivel y flags: rama libc,
   autodetección L2 y chroot `MATRIX_WRITE2=1` son condicionales).
   Cubre L1 completo (install/run/export/remove) y L2 en lecturas +
   guards AUR; L2 en escritura se ejercita con `MATRIX_WRITE2=1`
