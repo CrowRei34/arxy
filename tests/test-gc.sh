@@ -40,6 +40,10 @@ grep -q '"applied": false' <<<"$out" && ok "T0 applied false" || no "T0 applied 
 grep -q '"hint": "nada que limpiar"' <<<"$out" && ok "T0 hint nada" || no "T0 hint nada"
 cmd_gc --apply --yes >/dev/null 2>&1
 [[ $? -eq 0 ]] && ok "T0 apply rc 0" || no "T0 apply rc 0"
+# M8: rc no basta; efecto: sigue vacio y el json posterior da total 0.
+out="$(cmd_gc --json)"
+grep -q '"total_bytes": 0' <<<"$out" && grep -q '"applied": false' <<<"$out" && ok "T0 post-apply vacio" || no "T0 post-apply vacio"
+[[ ! -e "$R.old" ]] && ! ls -d "$R".new.* >/dev/null 2>&1 && ok "T0 sin restos" || no "T0 sin restos"
 
 echo "== T1: root.old valido -> prompt, --yes purga"
 clean; mkroot "$R"; mkroot "$R.old"; echo x > "$R.old/usr/bin/bash"
