@@ -245,7 +245,8 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 echo "  [todo] $fid ($reason)"
                 [[ -n "$would" ]] && echo "         would_do: $would"
                 if [[ "$fid" == hold-mesa && -n "$apply" ]]; then
-                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
+                    if sed -i '/^\[options\]/a IgnorePkg   = mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null \
+                        && grep -q '^IgnorePkg.*mesa' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null; then
                         echo "  [hecho] $fid aplicado"
                     else
                         echo "  [fallo] $fid no se pudo aplicar" >&2; fails=1

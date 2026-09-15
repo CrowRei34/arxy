@@ -118,5 +118,20 @@ unset -f mv
 [[ $rc -eq 0 ]] && grep -q "aviso: no pude recuperar $R.new.222" <<<"$out" && ok "T10 aviso + rc 0" || no "T10 aviso + rc 0"
 clean
 
+echo "== T11: hold-mesa sin [options] falla honesto, no [hecho] falso (Q6-H4)"
+clean; mkroot "$R" bueno
+printf '# sin estanza options\n' > "$R/etc/pacman.conf"
+id() { echo 0; }
+need_root() { return 0; }
+is_mesa_mini() { return 0; }
+cmd_install() { echo "STUB-INSTALL $*"; return 0; }
+out="$(doctor_fix --fix --apply 2>&1)"
+grep -q "\[fallo\] hold-mesa" <<<"$out" && ok "T11 sin options falla honesto" || no "T11 sin options ($out)"
+printf '[options]\n' > "$R/etc/pacman.conf"
+out="$(doctor_fix --fix --apply 2>&1)"
+unset -f id need_root is_mesa_mini cmd_install
+grep -q "\[hecho\] hold-mesa aplicado" <<<"$out" && grep -q '^IgnorePkg.*mesa' "$R/etc/pacman.conf" && ok "T11 control aplica" || no "T11 control ($out)"
+clean
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
