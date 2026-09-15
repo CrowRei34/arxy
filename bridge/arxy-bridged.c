@@ -527,7 +527,7 @@ static void session(int cfd, Req *q, char **av) {
                             if (pend) { // ya hay cola: encola detrás (con tope)
                                 if (pappend(&pend, &pn, &po, dd, dl)) {
                                     merror(cfd, "input too large"); proto_err = 1;
-                                    free(dd); req_free(&m); free(fr.pl); goto done;
+                                    free(dd); req_free(&m); free(fr.pl); fr.pl = NULL; goto done;
                                 }
                             } else { // intento directo; lo que no quepa se encola
                                 size_t off = 0;
@@ -538,7 +538,7 @@ static void session(int cfd, Req *q, char **av) {
                                     else if (w < 0 && errno == EAGAIN) {
                                         if (off < dl && pappend(&pend, &pn, &po, dd + off, dl - off)) {
                                             merror(cfd, "input too large"); proto_err = 1;
-                                            free(dd); req_free(&m); free(fr.pl); goto done;
+                                            free(dd); req_free(&m); free(fr.pl); fr.pl = NULL; goto done;
                                         }
                                         break;
                                     } else break; // EPIPE etc: el hijo no lee; se descarta

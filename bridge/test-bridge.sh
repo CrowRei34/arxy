@@ -107,6 +107,42 @@ elif mode == 'raw':
             print('INVALID:%d' % f[1])
         else:
             print('RESP:' + json.dumps(f[1]))
+elif mode == 'flood':
+    # hijo que nunca lee stdin + frames input hasta topar la cola (4 MiB):
+    # el daemon debe responder 'input too large', no cortar en seco (A4).
+    # Chunks de 90KB (frame < 128KiB) x70 = 6.1MB > tope; sleep largo para
+    # que el hijo no salga antes de llenar la cola.
+    send_frame(s, {"type":"request","command":["/bin/sh","-c","exec sleep 120"]})
+    chunk = base64.b64encode(b'A'*92160).decode()
+    got = None
+    s.settimeout(0.2)
+    for i in range(70):
+        try:
+            send_frame(s, {"type":"input","data":chunk})
+        except (BrokenPipeError, ConnectionResetError):
+            pass
+        try:
+            f = read_frame(s)
+        except socket.timeout:
+            continue
+        except (ConnectionResetError, BrokenPipeError):
+            got = 'EOF'
+            break
+        if f is None:
+            got = 'EOF'
+            break
+        k, v = f
+        if k == 'INVALID':
+            got = 'INVALID:%d' % v
+            break
+        t = v.get('type')
+        if t == 'error':
+            got = 'ERROR:' + v.get('error', '')
+            break
+        elif t == 'exit':
+            got = 'EXIT:%s' % v.get('code')
+            break
+    print(got if got else 'NOERROR')
 EOF
 
 # --- arranca el servidor ---
@@ -316,6 +352,30 @@ else
 fi
 kill "$SRV2" 2>/dev/null || true
 rm -f "$TMPD/br2.sock"
+
+# --- 20. cola input llena: 'input too large' sin tumbar la sesion (A4) ---
+out="$(timeout 60 python3 "$TMPD/bc.py" flood "$SOCK")"
+if test "$out" = "ERROR:input too large"; then
+    pass "cola llena responde 'input too large'"
+else
+    fail "flood: esperado ERROR:input too large, obtenido [$out]"
+fi
+out="$(python3 "$TMPD/bc.py" req "$SOCK" '{"type":"request","command":["/bin/echo","post-flood-ok"]}')"
+exp_out="OUT:$(printf 'post-flood-ok\n' | base64)"
+if test "${out%%$'\n'*}" = "$exp_out"; then
+    pass "daemon vivo tras flood"
+else
+    fail "flood-liveness: esperado [$exp_out], obtenido [$out]"
+fi
+# tripwire estatico: el free antes de 'goto done' debe anular el puntero
+# (musl no aborta en double-free: el flood solo no discriminaria; este
+# grep evita reintroducir el patron que hacia free(fr.pl) x2)
+n="$(grep -c 'free(fr.pl); fr.pl = NULL; goto done;' arxy-bridged.c)"
+if test "$n" = "2"; then
+    pass "double-free anulado en las 2 ramas"
+else
+    fail "tripwire: esperadas 2 ramas con fr.pl=NULL, hay [$n]"
+fi
 
 echo "----"
 echo "FAIL=$FAIL"
