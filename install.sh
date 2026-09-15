@@ -6,6 +6,8 @@
 #   sudo ./install.sh                    # a /usr/local
 #   sudo PREFIX=/usr ./install.sh        # a /usr
 #   DESTDIR=/tmp/pkg PREFIX=/usr ./install.sh   # empaquetado
+#   ./install.sh --help                  # esta ayuda
+#   ./install.sh --without-bridge        # omite el daemon
 #
 # Instala: bin/arxy (+ symlink axy) y etc/arxy.conf.
 # Con el daemon host-bridge salvo --without-bridge (Fase 5).
@@ -16,7 +18,13 @@ set -euo pipefail
 PREFIX="${PREFIX:-/usr/local}"
 DESTDIR="${DESTDIR:-}"
 WITH_BRIDGE=1
-if [[ "${1:-}" == "--without-bridge" ]]; then WITH_BRIDGE=""; fi
+for _a in ${1+"$@"}; do
+    case "$_a" in
+        --without-bridge) WITH_BRIDGE="" ;;
+        -h|--help) echo "uso: [sudo] PREFIX= DESTDIR= ./install.sh [--without-bridge]"; exit 0 ;;
+        *) echo "opcion desconocida: '$_a' (ver --help)" >&2; exit 1 ;;
+    esac
+done
 
 SRC_DIR="$(dirname "$(readlink -f "${BASH_SOURCE[0]}" 2>/dev/null || echo "${BASH_SOURCE[0]}")")"
 
@@ -34,6 +42,13 @@ done
 [[ -f "$SRC_DIR/src/arxy" ]] || { echo "no se encuentra src/arxy (ejecuta desde la raiz del repo)" >&2; exit 1; }
 [[ -f "$SRC_DIR/config/arxy.conf" ]] || { echo "no se encuentra config/arxy.conf" >&2; exit 1; }
 [[ -f "$SRC_DIR/config/arxy.pub" ]] || { echo "no se encuentra config/arxy.pub" >&2; exit 1; }
+
+# R5-H1: fallar ANTES de copiar nada si la sysconf no es escribible (antes
+# dejaba binarios a medias + error crudo de install(1)). Sube al primer
+# ancestro existente para no romper DESTDIR staging aun no creado.
+_conf_probe="$CONF_DST"
+while [[ ! -e "$_conf_probe" ]]; do _conf_probe="$(dirname "$_conf_probe")"; done
+[[ -w "$_conf_probe" ]] || { echo "sin escritura en $CONF_DST (¿root? para staging usa DESTDIR=/tmp/pkg $0)" >&2; exit 1; }
 
 install -d -m755 "$BIN_DST" "$CONF_DST"
 install -m755 "$SRC_DIR/src/arxy" "$BIN_DST/arxy"

@@ -13,6 +13,8 @@ license="MIT"
 homepage="https://github.com/SrDicov/arxy"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
 # arxy.pub NO es conf_files: es trust root y el paquete la renueva.
+# R5-H2: sin bridge (equivale a install.sh --without-bridge; el daemon
+# requiere compilar bridge/ aparte). Siguiente tras instalar: sudo arxy setup.
 conf_files="/etc/arxy/arxy.conf"
 
 do_install() {
