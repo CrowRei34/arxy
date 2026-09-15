@@ -106,3 +106,9 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 - Padding base64 interior laxo (ídem): exigir `=` solo al final.
 - Off-by-one 65/64 en parse (ídem, inocuo: `authorize()` limita a
   `MAXARGS`).
+
+## 14. Aislamiento GUI (`ARXY_GUI_ISOLATION`, Fase 6b)
+
+X11 bridge / Wayland isolation no se implementan en bash (Fase 6b,
+Go/C). Patrón `narrowedTo` (§12): diferido con upgrade identificado;
+solo cuando un consumidor real lo pida. `xdg-open` cubre `gio`.

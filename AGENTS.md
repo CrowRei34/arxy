@@ -25,6 +25,14 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
   el binario (`$BIN`, `src/arxy`) siempre DESPUÉS de sync (stale miente).
 - Matrix con assertions de **contenido** (`grep`), nunca solo rc
   ← Fase 4: bugs mudos con rc=0 (lecturas L2, AUR roto).
+- Push, releases y GitHub (incl. z-repo): solo con pedido explícito
+  (preguntar antes de tocar remoto). El CI no valida sin push:
+  `lint.yml` inválido desde Fase 1 solo se vio al primer push.
+  Release: checksum verificado contra el asset + bump de template en
+  z-packages + dispatch del autobuild + `xbps-query -Rs` tras Pages.
+- Transición manual→paquete: si arxy se instaló a mano, borrar
+  `/usr/local/bin/arxy*` y `/usr/local/lib/arxy/` antes del paquete
+  (hacen shadow por PATH y resucitan bugs viejos: EPERM pre-Commit-18).
 - `pacman` siempre `--noconfirm` vía `nc_args`; nunca `LD_LIBRARY_PATH`
   (envenena al subsistema: solo `ld-linux --library-path`, y se hace
   `unset` explícito).
@@ -81,6 +89,10 @@ cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/vo
 - `command -v` no resuelve builtins/funciones (`command -v echo` da
   `echo`): para localizar ejecutables, barrer `PATH` a mano +
   `readlink -f` (patron: `bridge_resolve_allowlist`).
+- Sin shims en el rootfs: las apps llegan al host vía
+  `ARXY_BRIDGE_SOCKET`/`ARXY_BRIDGE_TOKEN` + allowlist del daemon
+  (e2e: T0/T16/T19 en `test-bridge-in-container.sh`); `xdg-open` cubre
+  `gio` (sin caso real no se añade).
 - `LD_LIBRARY_PATH` no se scrubbea en L1 a proposito (blast radius
   mayor que `VK_*`; sin caso real que lo pida no se toca).
 
