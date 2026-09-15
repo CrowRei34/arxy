@@ -143,6 +143,18 @@ Vars: `MATRIX_IMAGE`, `ARXY_ROOT` (aislar rootfs), `MATRIX_WRITE2=1`
 Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
 `PROFILE=x sudo…` pierde el env porque sudo lo limpia).
 
+Contrato cross-repo CLI↔imagen (Q3-H1/H3/H6, tercera pasada):
+- El tarball no porta version: `_image_ok` valida 3 ficheros
+  (`bash`+`pacman`+`arch-release`) y `write_version` escribe
+  `version.json` post-extract. La fecha de build de la imagen no viaja.
+- `_image_ok` es intencionalmente minimo (keyring/mirrorlist/fuentes
+  los pinea la matrix, no el CLI).
+- Division de cobertura (intencional, no hueco): `search`/`info`/`list`
+  con contenido, `fc-list`, `quickstart`, `clean dry-run` y los `.desktop`
+  reales solo los pinea la matrix (e2e con imagen real); la suite del CLI
+  pinea contrato con mocks. Si la matrix rompe en verde de suite, mirar
+  primero el set de paquetes de la imagen.
+
 ## Reglas (cada una cita el bug; sin el porqué, caducan)
 
 1. Releer la función entera tras cada edit; probar el path tocado, no

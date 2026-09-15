@@ -133,5 +133,26 @@ unset -f id need_root is_mesa_mini cmd_install
 grep -q "\[hecho\] hold-mesa aplicado" <<<"$out" && grep -q '^IgnorePkg.*mesa' "$R/etc/pacman.conf" && ok "T11 control aplica" || no "T11 control ($out)"
 clean
 
+echo "== T12: ciclo de vida no toca paths del bridge (Q4-H2/H4)"
+# Contrato: setup/rollback/gc viven bajo ARXY_ROOT/ARXY_DATA; el daemon
+# (socket/pid/token) vive fuera. Si alguien referencia el bridge desde
+# el ciclo de vida, este pin cae (en codigo, no en comentario).
+if grep -n "arxy-bridge\|BRIDGE_SOCKET\|bridge_sock_path\|bridge_pid_path\|bridge_token_path\|bridge_session" "$HERE"/../lib/20-lifecycle.sh | grep -qv '^[0-9]*:#'; then
+    no "T12 lifecycle sin refs bridge"
+else
+    ok "T12 lifecycle sin refs bridge"
+fi
+# Conductual: socket falso dentro de DATA sobrevive a recover_staging.
+if command -v python3 >/dev/null 2>&1; then
+    clean; mkroot "$R" bueno; mkdir -p "$R.new.111"; touch "$D/.image.partial.777"
+    python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.bind('$D/br.sock')" 2>/dev/null
+    recover_staging >/dev/null 2>&1
+    [[ -S "$D/br.sock" ]] && ok "T12 socket sobrevive a recover" || no "T12 socket borrado por recover"
+    rm -f "$D/br.sock"
+else
+    echo "SKIP: T12 conductual (sin python3)"
+fi
+clean
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
