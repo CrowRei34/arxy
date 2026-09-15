@@ -228,7 +228,7 @@ cmd_setup() {
             msg "verificado contra .sha256 del release"
             img_sha="$sha_rel"
         else
-            msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
+            msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion" >&2
         fi
     fi
     # Firma minisign (Fase 7): segundo factor sobre sha256. Solo http(s) sin
@@ -357,7 +357,7 @@ cmd_setup() {
     data_sync "$ARXY_ROOT" "$ARXY_DATA"
     if [[ -d "$old_tmp" ]]; then
         rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
-        mv "$old_tmp" "$ARXY_ROOT.old" || msg "aviso: no pude rotar $old_tmp a rollback (el proximo arranque lo rescata)"
+        mv "$old_tmp" "$ARXY_ROOT.old" || msg "aviso: no pude rotar $old_tmp a rollback (el proximo arranque lo rescata)" >&2
     fi
     data_sync "$ARXY_DATA"
     # Una sola verdad: el legacy fuera del root ya no se escribe ni se lee.

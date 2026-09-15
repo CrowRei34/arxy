@@ -243,7 +243,7 @@ ensure_aur_env() {
         HAVE_PARU=1
     else
         HAVE_PARU=
-        msg "aviso: paru no usable (roto con pacman 7.1 hasta nuevo release); usando git+RPC"
+        msg "aviso: paru no usable (roto con pacman 7.1 hasta nuevo release); usando git+RPC" >&2
     fi
 }
 
@@ -502,7 +502,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     local auto="${1:-}"
     local start=$SECONDS saved=0 linked=0
     local work=""
-    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX" 2>/dev/null)" || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)"; return 0; }
+    work="$(mktemp -d "$ARXY_DATA/.arxy-dedup.XXXXXX" 2>/dev/null)" || { msg "aviso: sin dedup (no hay temporal en $ARXY_DATA)" >&2; return 0; }
     local _trap_return _trap_exit
     _trap_return="$(trap -p RETURN || true)"; _trap_exit="$(trap -p EXIT || true)"
     trap '[[ -n "${work:-}" ]] && rm -rf "$work"' RETURN EXIT

@@ -42,5 +42,12 @@ v="$( ( export ARXY_SIGNATURE_POLICY=off XDG_CONFIG_HOME="$D/xdg-user"; src ) )"
 err="$( ( export ARXY_SIGNATURE_POLICY=bogus; enforce_signature_policy 0 ) 2>&1 >/dev/null || true)"
 grep -q 'required|optional|off' <<<"$err" && ok "T2: mensaje lista valores" || no "T2: mensaje lista valores" "[$err]"
 
+echo "== T3: todo aviso: va a stderr (P5-H4; tripwire)"
+if grep -rn 'msg "aviso:' "$HERE/../lib" | grep -v '>&2' | grep -q .; then
+    no "T3 avisos a stderr" "$(grep -rn 'msg "aviso:' "$HERE/../lib" | grep -v '>&2' | head -n 3 | tr '\n' ' ')"
+else
+    ok "T3 avisos a stderr"
+fi
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
