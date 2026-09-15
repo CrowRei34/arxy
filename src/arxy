@@ -968,7 +968,10 @@ clean_pkg_cache() {
 # proposito (exige match exacto con el modulo del host): usa el driver del host.
 cmd_gpu_stack() { # <gpu-amd|gpu-nvidia>
     # Quitar el hold de la imagen (sin match = ya quitado: idempotente).
-    [[ -f "$ARXY_ROOT/etc/pacman.conf" ]] || return 0
+    # Sin pacman.conf no hay nada que stackear: aviso (no silencio) y rc 0.
+    if [[ ! -f "$ARXY_ROOT/etc/pacman.conf" ]]; then
+        msg "aviso: sin pacman.conf en $ARXY_ROOT, omito gpu-stack" >&2; return 0
+    fi
     sed -i -E 's|^#?IgnorePkg[[:space:]]*=[[:space:]]*mesa|#IgnorePkg = mesa|' "$ARXY_ROOT/etc/pacman.conf" 2>/dev/null || true
     # Sin --needed a proposito: mini y oficial comparten pkgname+version y
     # --needed lo daria por satisfecho. Solo reinstala si falta LLVM.
@@ -1121,7 +1124,8 @@ cmd_install() {
     local p
     for p in "${pkgs[@]}"; do
         [[ "$p" == -* ]] && continue
-        cmd_export "$p" || true
+        # Best-effort honesto: si export muere, avisar (no silencio).
+        cmd_export "$p" || msg "aviso: no pude exportar $p" >&2
     done
     update_desktop_db
     # Legacy sin tag que export_one no toco (pre-X-Arxy-Pkg): aviso a

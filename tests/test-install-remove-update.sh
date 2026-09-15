@@ -20,8 +20,9 @@ printf '[options]\n' > "$ARXY_ROOT/etc/pacman.conf"
 # shellcheck source=../lib/30-package.sh
 . "$HERE/../lib/30-package.sh" >/dev/null 2>&1
 
-# Real antes de stubear (T7 restaura esta definicion en su subshell).
+# Real antes de stubear (T7/T9 restauran en su subshell).
 _REAL_AUR="$(declare -f cmd_install_aur)"
+_REAL_GPUSTACK="$(declare -f cmd_gpu_stack)"
 # Stubs: ningun efecto real; registran llamadas.
 need_root() { return 0; }
 ensure_image() { return 0; }
@@ -69,6 +70,14 @@ out="$( eval "$_REAL_AUR"; _ARXY_LEVEL=2; cmd_install --aur algo-bin 2>&1 )"; rc
 echo "== T8: install sin args muere con uso"
 out="$(cmd_install 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "uso:" <<<"$out" && ok "T8 uso" || no "T8 uso (rc=$rc)"
+
+echo "== T9: gpu-stack sin pacman.conf avisa, no silencia (P5-H3)"
+out="$( eval "$_REAL_GPUSTACK"; ARXY_ROOT="$D/sinroot" cmd_gpu_stack gpu-amd 2>&1 )"; rc=$?
+[[ $rc -eq 0 ]] && grep -q "omito gpu-stack" <<<"$out" && ok "T9 aviso" || no "T9 aviso (rc=$rc $out)"
+
+echo "== T10: export fallido avisa y no tumba el install (P5-H3)"
+out="$( cmd_export() { return 1; }; cmd_install foo 2>&1 )"; rc=$?
+[[ $rc -eq 0 ]] && grep -q "no pude exportar foo" <<<"$out" && grep -q "PACMAN_MUT.*foo" <<<"$out" && ok "T10 aviso+sigue" || no "T10 aviso+sigue (rc=$rc $out)"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
