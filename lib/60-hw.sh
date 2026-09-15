@@ -252,7 +252,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     fi
                 elif [[ "$fid" == staging-cleanup && -n "$apply" ]]; then
                     recover_staging >/dev/null
-                    echo "  [hecho] $fid aplicado (ver 'recovered:' arriba)"
+                    echo "  [hecho] $fid aplicado (ver 'recuperado:' arriba)"
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
                     mapfile -t _sp < <(gpu_stack_pkgs)

@@ -222,8 +222,9 @@ en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 - `doctor --json` lleva `"format": 1` desde el día 1; añadir campos es
   compatible, renombrar/quitar exige `format: 2`. Schema exacto: comentario
   en `lib/60-hw.sh` (única fuente, sin `.md` que derive).
-- `reason`/`would_do` del JSON en español (idioma del repo; verificado: no
-  hay mezcla con inglés en el código).
+- `reason`/`would_do` del JSON en español (idioma del repo; el bash es
+  español salvo etiquetas de informe heredadas —`fixes available:`,
+  `[hecho]/[fallo]`— y el bridge C, que informa en inglés).
 - `hardware.json` es caché, no fuente: `doctor --json` calcula fresco.
 - `--fix` informa por defecto; `--apply` exige root; destructivos exigen `--confirm` + tty.
 - Mocks de detección (tests sin root ni imagen, patrón `ARXY_SYS_DRM_PATH`):

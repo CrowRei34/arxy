@@ -544,15 +544,15 @@ recover_staging() { # aplica staging_inventory; log a stderr; rc 0 siempre
     while IFS=$'\t' read -r acc path; do
         [[ -n "${path:-}" ]] || continue
         case "$acc" in
-            remove) if rm -rf "${path:?}" 2>/dev/null; then msg "recovered: huerfano borrado from $path" >&2;
+            remove) if rm -rf "${path:?}" 2>/dev/null; then msg "recuperado: huerfano borrado de $path" >&2;
                 else msg "aviso: no pude recuperar $path (huerfano no borrado)" >&2; fi ;;
-            recover-root) if mv "$path" "$R" 2>/dev/null; then msg "recovered: root restaurado from $path" >&2;
+            recover-root) if mv "$path" "$R" 2>/dev/null; then msg "recuperado: root restaurado de $path" >&2;
                 else msg "aviso: no pude recuperar $path (root no restaurado)" >&2; fi ;;
             replace-root) rm -rf "${R:?}" 2>/dev/null || msg "aviso: no pude borrar root invalido $R" >&2
-                if mv "$path" "$R" 2>/dev/null; then msg "recovered: root invalido reemplazado from $path" >&2;
+                if mv "$path" "$R" 2>/dev/null; then msg "recuperado: root invalido reemplazado de $path" >&2;
                 else msg "aviso: no pude recuperar $path (root invalido no reemplazado)" >&2; fi ;;
             rotate-old) rm -rf "${R:?}.old" 2>/dev/null || msg "aviso: no pude borrar $R.old" >&2
-                if mv "$path" "$R.old" 2>/dev/null; then msg "recovered: rotado a .old from $path" >&2;
+                if mv "$path" "$R.old" 2>/dev/null; then msg "recuperado: rotado a .old de $path" >&2;
                 else msg "aviso: no pude recuperar $path (no rotado a .old)" >&2; fi ;;
         esac
     done < <(staging_inventory)
@@ -2270,7 +2270,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     fi
                 elif [[ "$fid" == staging-cleanup && -n "$apply" ]]; then
                     recover_staging >/dev/null
-                    echo "  [hecho] $fid aplicado (ver 'recovered:' arriba)"
+                    echo "  [hecho] $fid aplicado (ver 'recuperado:' arriba)"
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
                     mapfile -t _sp < <(gpu_stack_pkgs)

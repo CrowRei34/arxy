@@ -111,7 +111,7 @@ unset -f tar zstd
 rec="$(ensure_image 2>&1)"
 [[ "$(cat "$R/.mark" 2>/dev/null)" == viejo ]] && ok "T3 marcador intacto" || no "T3 marcador intacto"
 ls -d "$R".new.* >/dev/null 2>&1 && no "T3 staging borrado" || ok "T3 staging borrado"
-grep -q "recovered" <<<"$rec" && ok "T3 recovery loguea" || no "T3 recovery loguea"
+grep -q "recuperado" <<<"$rec" && ok "T3 recovery loguea" || no "T3 recovery loguea"
 
 echo "== T4: kill -9 tras apartar root, antes del rename"
 rm -rf "$D/root" "$D/root.old" "$D"/root.new.* "$D"/root.old.tmp.* "$D"/.image.partial.* "$D/version"
@@ -125,7 +125,7 @@ rec="$(ensure_image 2>&1)"
 [[ "$(cat "$R/.mark" 2>/dev/null)" == viejo ]] && ok "T4 root recuperado" || no "T4 root recuperado"
 grep -q '"image": "file:///gen-vieja"' "$R/var/lib/arxy/version" 2>/dev/null && ok "T4 version viajo con root" || no "T4 version viajo con root"
 ls -d "$R".old.tmp.* >/dev/null 2>&1 && no "T4 tmp resuelto" || ok "T4 tmp resuelto"
-grep -q "recovered" <<<"$rec" && ok "T4 recovery loguea" || no "T4 recovery loguea"
+grep -q "recuperado" <<<"$rec" && ok "T4 recovery loguea" || no "T4 recovery loguea"
 
 echo "== T5: root valido sin version (pre-Commit 6) se regenera"
 rm -rf "$D/root" "$D/root.old" "$D"/root.new.* "$D"/root.old.tmp.* "$D/version"
