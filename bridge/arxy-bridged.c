@@ -47,6 +47,18 @@
 #define MAXARGSZ 4096 // spec D1: 4KiB por arg (hrun usa 16KiB)
 #define CHUNK 32768 // lectura salida hijo (b64 cabe holgado en MaxFrame)
 #define INQUEUEMAX (4u * 1024u * 1024u) // tope de stdin pendiente
+// Magia centralizada (P5-H9: estaba duplicada en session/resize/listener):
+#define WS_MAXDIM 65536 // tope de columna/fila pedida
+#define WS_DEF_COLS 80 // defecto como xterm
+#define WS_DEF_ROWS 24
+#define REQ_TIMEOUT_MS 10000 // espera del request (== hrun requestTimeout)
+#define LISTEN_BACKLOG 16
+#define DIR_MODE 0700 // dir del socket
+#define SOCK_MODE 0600
+#define UMASK_PRIV 077 // lo creado sale 0700/0600 aunque el umask sea otro
+#define EXIT_NOEXEC 127 // hijo que no se pudo ejecutar (== shell)
+#define EXIT_NOSIG 126 // hijo muerto sin exit ni señal (== bash)
+#define EXIT_SIGNAL_BASE 128 // 128+señal (== bash)
 
 static char **g_allow;
 static int g_nallow;
@@ -465,8 +477,8 @@ static void session(int cfd, Req *q, char **av) {
     int ispty = q->tty ? 1 : 0;
     if (ispty) { // modo PTY: openpty + winsize del request (defecto 80x24)
         struct winsize ws;
-        ws.ws_col = q->w > 0 && q->w < 65536 ? (unsigned short)q->w : 80;
-        ws.ws_row = q->h > 0 && q->h < 65536 ? (unsigned short)q->h : 24;
+        ws.ws_col = q->w > 0 && q->w < WS_MAXDIM ? (unsigned short)q->w : WS_DEF_COLS;
+        ws.ws_row = q->h > 0 && q->h < WS_MAXDIM ? (unsigned short)q->h : WS_DEF_ROWS;
         ws.ws_xpixel = ws.ws_ypixel = 0;
         if (openpty(&outfd, &c0, NULL, NULL, &ws)) { merror(cfd, "pty failed"); return; }
         infd = outfd;
@@ -496,7 +508,7 @@ static void session(int cfd, Req *q, char **av) {
             close(c0); close(c1); close(infd); close(outfd); close(cfd);
         }
         execv(av[0], av);
-        _exit(127); // como el shell: binario que no se pudo ejecutar
+        _exit(EXIT_NOEXEC); // como el shell: binario que no se pudo ejecutar
     }
     close(c0); // extremo del hijo
     if (!ispty) close(c1);
@@ -552,8 +564,8 @@ static void session(int cfd, Req *q, char **av) {
                         if (!ispty && infd >= 0) { close(infd); infd = -1; } // EOF al hijo
                     } else if (!strcmp(m.type, "resize") && ispty) {
                         struct winsize ws2; // SIGWINCH del cliente
-                        ws2.ws_col = m.w > 0 && m.w < 65536 ? (unsigned short)m.w : 80;
-                        ws2.ws_row = m.h > 0 && m.h < 65536 ? (unsigned short)m.h : 24;
+                        ws2.ws_col = m.w > 0 && m.w < WS_MAXDIM ? (unsigned short)m.w : WS_DEF_COLS;
+                        ws2.ws_row = m.h > 0 && m.h < WS_MAXDIM ? (unsigned short)m.h : WS_DEF_ROWS;
                         ws2.ws_xpixel = ws2.ws_ypixel = 0;
                         ioctl(outfd, TIOCSWINSZ, &ws2);
                     }
@@ -582,7 +594,7 @@ done:
             if (r > 0) { if (moutput(cfd, buf, (size_t)r)) break; }
             else break;
         }
-        int code = WIFEXITED(status) ? WEXITSTATUS(status) : WIFSIGNALED(status) ? 128 + WTERMSIG(status) : 126;
+        int code = WIFEXITED(status) ? WEXITSTATUS(status) : WIFSIGNALED(status) ? EXIT_SIGNAL_BASE + WTERMSIG(status) : EXIT_NOSIG;
         mexit(cfd, code);
     }
     if (!ispty && infd >= 0) close(infd);
@@ -597,7 +609,7 @@ static void handle(int cfd) {
     FR fr; fr_init(&fr);
     for (;;) { // espera el request (10s como hrun requestTimeout)
         struct pollfd p; p.fd = cfd; p.events = POLLIN; p.revents = 0;
-        if (poll(&p, 1, 10000) <= 0) { close(cfd); return; }
+        if (poll(&p, 1, REQ_TIMEOUT_MS) <= 0) { close(cfd); return; }
         int f = fr_feed(&fr, cfd);
         if (f == 1) break;
         if (f != 0) {
@@ -627,10 +639,10 @@ static void handle(int cfd) {
     free(av); free(abs); req_free(&q); close(cfd);
 }
 
-// ---------- listener seguro (dir 0700, socket 0600, limpia stale) ----------
+// ---------- listener seguro (dir DIR_MODE, socket SOCK_MODE, limpia stale) ----------
 static void mkpath(char *d) {
-    for (char *p = d + 1; *p; p++) if (*p == '/') { *p = 0; mkdir(d, 0700); *p = '/'; }
-    mkdir(d, 0700);
+    for (char *p = d + 1; *p; p++) if (*p == '/') { *p = 0; mkdir(d, DIR_MODE); *p = '/'; }
+    mkdir(d, DIR_MODE);
 }
 static int secure_listen(const char *path) {
     const char *sl = strrchr(path, '/');
@@ -641,7 +653,7 @@ static int secure_listen(const char *path) {
         if (n >= sizeof dir) die("socket path too long");
         memcpy(dir, path, n); dir[n] = 0;
     } else { strcpy(dir, "."); }
-    mode_t old = umask(077); // que lo creado salga 0700/0600 aunque el umask sea otro
+    mode_t old = umask(UMASK_PRIV); // que lo creado salga 0700/0600 aunque el umask sea otro
     mkpath(dir);
     umask(old);
     struct stat st;
@@ -654,8 +666,8 @@ static int secure_listen(const char *path) {
     size_t pl = strlen(path);
     if (pl >= sizeof a.sun_path) die("socket path too long");
     memcpy(a.sun_path, path, pl + 1);
-    if (bind(ls, (struct sockaddr *)&a, sizeof a) || listen(ls, 16)) { close(ls); die("bind/listen failed"); }
-    chmod(path, 0600);
+    if (bind(ls, (struct sockaddr *)&a, sizeof a) || listen(ls, LISTEN_BACKLOG)) { close(ls); die("bind/listen failed"); }
+    chmod(path, SOCK_MODE);
     return ls;
 }
 
