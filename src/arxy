@@ -294,7 +294,9 @@ run_in() {
     ensure_bridge_daemon || true
     local _bsock=""
     _bsock="$(bridge_sock_path)"
-    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-${UID}.sock"
+    # Fallback con LA MISMA expansion que bridge_sock_path (P5-H10: ${UID}
+    # divergia sintacticamente del $(id -u) canonico).
+    [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-$(id -u).sock"
     if [[ -S "$_bsock" && -z "${ARXY_NO_BRIDGE:-}" ]]; then
         # Solo si esta vivo: socket huerfano (kill -9) no se monta. Sin
         # pidfile se confia (daemon foreground manual, sin pidfile).
