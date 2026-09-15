@@ -7,7 +7,7 @@
 // C11/POSIX, solo libc, sin dependencias externas.
 // Uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]
 // DEUDA Fase 5 (auditoría pre-commit; el spike se commitea tal cual):
-// BLOQUEANTES resueltos en Commit 14 (con tests en test-bridge.sh):
+// BLOQUEANTES resueltos en Commit 14 (con tests en bridge/test-bridge.sh):
 //  1. jskip con tope JSON_MAX_DEPTH (era recursivo sin tope).
 //  2. resolve_cmd rechaza relativo con '/' y componentes PATH no absolutos.
 //  3. Strict JSON: claves desconocidas y basura tras '}' se rechazan.

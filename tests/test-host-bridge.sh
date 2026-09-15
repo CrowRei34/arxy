@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-host-bridge.sh — CLI de `arxy host-bridge` sin root ni imagen:
-# mecanica --daemon/--stop/--status (el protocolo vive en test-bridge.sh
+# mecanica --daemon/--stop/--status (el protocolo vive en bridge/test-bridge.sh
 # y el e2e en test-bridge-in-container.sh). Daemon y socket en TMP.
 set -uo pipefail
 FAIL=0
