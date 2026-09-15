@@ -100,5 +100,22 @@ for p in "../x" "/etc" "" "a b" 'a;b' 'a$(x)' "-flag" "--"; do (check_pkg_name "
 echo "== T12: rm -rf destructivos llevan :? (tripwire A3)"
 grep -q 'rm -rf "${R:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${R:?}.old"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${stage:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${work_host:?}"' "$HERE/../lib/30-package.sh" && ok "T12 :? presente" || no "T12 :? presente"
 
+echo "== T12b: ningun rm -rf sobre var pelada en lib/ (Q2-H9)"
+# Todo rm -rf exige :? o :- o guarda [[ -n ... ]] en la misma linea.
+# Excepciones justificadas: 60-hw.sh (rama mkdir-fallo: mktemp pudo
+# fallar y hay que retornar 0) y el trap de do_dedup con -n explicito.
+bad12b="$(grep -hE 'rm -rf "\$[A-Za-z_]' "$HERE"/../lib/20-lifecycle.sh "$HERE"/../lib/30-package.sh "$HERE"/../lib/60-hw.sh | grep -v ':?\|:-\|\[\[ -n' || true)"
+[[ -z "$bad12b" ]] && ok "T12b rm -rf con guarda" || no "T12b sin guarda: $bad12b"
+
+echo "== T13: barridos prefieren /usr/bin sobre /usr/local (Q2-H2 shadow)"
+# Un binario viejo en /usr/local hacia shadow al empaquetado y resucitaba
+# bugs (EPERM pre-Commit-18); el orden /usr/bin primero lo impide.
+ord13=1
+for _f13 in "$HERE/../lib/50-run.sh" "$HERE/../lib/41-desktop.sh"; do
+    _l13="$(grep -h 'for cand in' "$_f13")"
+    case "$_l13" in *'/usr/bin/'*'/usr/local/bin/'*) : ;; *) ord13=0; echo "  orden roto en $_f13";; esac
+done
+[[ $ord13 -eq 1 ]] && ok "T13 orden /usr/bin primero" || no "T13 orden"
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

@@ -23,7 +23,9 @@ if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true >/dev/null 2>&1; then
 else
     echo "== T2: sudo real deja pasar VAR= explicitos"
     mapfile -t _pass < <(arxy_env_pass)
-    if sudo -n "${_pass[@]}" -- env 2>/dev/null | grep -qx 'ARXY_E2E_PROBE=hola-sudo'; then ok "T2 viaja";
+    # Q2-H3: capturar y grepear despues (regla 5); el pipe directo a
+    # grep -q bajo pipefail daba SIGPIPE 141 intermitente (flake).
+    if out="$(sudo -n "${_pass[@]}" -- env 2>/dev/null)" && grep -qx 'ARXY_E2E_PROBE=hola-sudo' <<<"$out"; then ok "T2 viaja";
     else no "T2 viaja"; fi
     echo "== T3: as_root real propaga al hijo elevado"
     if out="$(as_root env 2>/dev/null)" && grep -qx 'ARXY_E2E_PROBE=hola-sudo' <<<"$out"; then ok "T3 as_root";

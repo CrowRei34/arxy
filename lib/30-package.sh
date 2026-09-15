@@ -548,7 +548,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
     if [[ -n "$_trap_exit" ]]; then eval "$_trap_exit"; else trap - EXIT; fi
-    rm -rf "$work" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
+    rm -rf "${work:?}" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
     return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 

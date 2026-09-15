@@ -123,6 +123,14 @@ if command -v minisign >/dev/null 2>&1; then
     cp "$V/msg.minisig" "$D/v-sig-tocada.minisig" && sed -i '2s/./X/' "$D/v-sig-tocada.minisig"
     ( verify_signature "$V/msg.bin" "$D/v-sig-tocada.minisig" "$V/t.pub" ); rc=$?
     [[ "$rc" == 1 ]] && ok "vector: firma tocada falla" || no "vector: firma tocada falla" "$rc"
+    # Q2-H11: minisign ignora basura trailing por diseno (A5); pinnearlo
+    # para que nadie lo "endurezca" rompiendo compat, y cruzar args para
+    # cazar delegacion con pub/sig trocados (falla con rc!=0 igual).
+    cp "$V/msg.minisig" "$D/v-sig-basura.minisig" && printf 'basura-trailing\n' >>"$D/v-sig-basura.minisig"
+    ( verify_signature "$V/msg.bin" "$D/v-sig-basura.minisig" "$V/t.pub" ); rc=$?
+    [[ "$rc" == 0 ]] && ok "vector: trailing aceptado (diseno)" || no "vector: trailing aceptado" "$rc"
+    ( verify_signature "$V/msg.bin" "$V/t.pub" "$V/msg.minisig" ); rc=$?
+    [[ "$rc" != 0 ]] && ok "vector: args cruzados fallan" || no "vector: args cruzados pasan" "$rc"
 else
     echo "SKIP: vector conocido (sin minisign)"
 fi

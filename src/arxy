@@ -781,14 +781,14 @@ cmd_setup() {
             printf '%s\n' "$_hg" >> "$stage/etc/group"
         fi
     fi
-    _image_ok "$stage" || { rm -rf "$stage"; die "imagen corrupta: sin bash/pacman/arch-release"; }
+    _image_ok "$stage" || { rm -rf "${stage:?}"; die "imagen corrupta: sin bash/pacman/arch-release"; }
     [[ -z "$img_sha" ]] && img_sha="$ARXY_IMAGE_SHA256"
     # version DENTRO del staging: nace con la imagen y el rename la publica
     # junta — nunca hay root nuevo con version vieja ni al reves. El subshell
     # contiene el override (sin save/restore); die ahi sale del subshell.
-    mkdir -p "$stage/var/lib/arxy" || { rm -rf "$stage"; die "no pude registrar version en el staging"; }
+    mkdir -p "$stage/var/lib/arxy" || { rm -rf "${stage:?}"; die "no pude registrar version en el staging"; }
     ( export ARXY_VERSION_FILE="$stage/var/lib/arxy/version"
-      write_version "$ARXY_IMAGE_URL" "$img_sha" ) || { rm -rf "$stage"; die "no pude escribir version"; }
+      write_version "$ARXY_IMAGE_URL" "$img_sha" ) || { rm -rf "${stage:?}"; die "no pude escribir version"; }
     data_sync "$stage" "$ARXY_DATA"
     # rc para la shell de nivel 2: resuelve en el subsistema lo que el host
     # no conoce (rutas horneadas; se regenera en cada setup). Antes del
@@ -824,14 +824,14 @@ cmd_setup() {
     # Rotacion via .old.tmp.$$ : el rename publica imagen+version juntas
     # (atomico). Kill aqui deja .old.tmp.$$ y lo resuelve recover_staging.
     local old_tmp="$ARXY_ROOT.old.tmp.$$"
-    rm -rf "$old_tmp" 2>/dev/null || true
+    rm -rf "${old_tmp:?}" 2>/dev/null || true
     if [[ -d "$ARXY_ROOT" ]]; then
-        mv "$ARXY_ROOT" "$old_tmp" || { rm -rf "$stage"; die "no pude apartar la instalacion actual"; }
+        mv "$ARXY_ROOT" "$old_tmp" || { rm -rf "${stage:?}"; die "no pude apartar la instalacion actual"; }
     fi
     mv "$stage" "$ARXY_ROOT" || die "rotacion fallo (la anterior esta en $old_tmp; el proximo arranque la rescata)"
     data_sync "$ARXY_ROOT" "$ARXY_DATA"
     if [[ -d "$old_tmp" ]]; then
-        rm -rf "$ARXY_ROOT.old" 2>/dev/null || true
+        rm -rf "${ARXY_ROOT:?}.old" 2>/dev/null || true
         mv "$old_tmp" "$ARXY_ROOT.old" || msg "aviso: no pude rotar $old_tmp a rollback (el proximo arranque lo rescata)" >&2
     fi
     data_sync "$ARXY_DATA"
@@ -1514,7 +1514,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
     if [[ -n "$_trap_exit" ]]; then eval "$_trap_exit"; else trap - EXIT; fi
-    rm -rf "$work" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
+    rm -rf "${work:?}" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
     return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 
@@ -2451,7 +2451,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
     _trap_return="$(trap -p RETURN || true)"
     trap 'rm -rf "${t:-}"' RETURN
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; rm -rf "$t"; return 0; }
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; [[ -n "$t" ]] && rm -rf "$t"; return 0; }; # Q2-H9: sin :? aqui (mktemp pudo fallar y hay que retornar 0, no morir); T12b lo permite solo en esta linea
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
@@ -2459,7 +2459,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
         echo 0
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
-    rm -rf "$t"
+    rm -rf "${t:?}"
     return 0
 }
 probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12

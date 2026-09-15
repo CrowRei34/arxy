@@ -412,7 +412,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
     _trap_return="$(trap -p RETURN || true)"
     trap 'rm -rf "${t:-}"' RETURN
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; rm -rf "$t"; return 0; }
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; [[ -n "$t" ]] && rm -rf "$t"; return 0; }; # Q2-H9: sin :? aqui (mktemp pudo fallar y hay que retornar 0, no morir); T12b lo permite solo en esta linea
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
@@ -420,7 +420,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
         echo 0
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
-    rm -rf "$t"
+    rm -rf "${t:?}"
     return 0
 }
 probe_mount_setattr() { kver_at_least 5 12 && echo 1 || echo 0; } # existe desde 5.12
