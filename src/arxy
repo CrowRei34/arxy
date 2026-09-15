@@ -122,6 +122,7 @@ arxy_env_pass() { # imprime VAR=val por linea (valores: rutas/flags, sin \n)
     local v
     while IFS= read -r v; do
         [[ "$v" == ARXY_ARGV ]] && continue # array, no escalar
+        [[ "$v" == ARXY_LOCK_FD ]] && continue # fd local: el hijo debe tomar su propio lock
         printf '%s=%s\n' "$v" "${!v}"
     done < <(compgen -v | grep '^ARXY_' || true)
 }
@@ -158,6 +159,32 @@ _image_ok() { # <dir>: valida un rootfs (instalado o en staging)
     [[ -x "$1/usr/bin/bash" && -x "$1/usr/bin/pacman" && -f "$1/etc/arch-release" ]]
 }
 image_ok() { _image_ok "$ARXY_ROOT"; }
+
+# Lock advisory unico para ops con estado (Q4-H1: setup/rollback/gc-apply/
+# clean-apply/install/remove/update/doctor-apply corrian sin serializar;
+# dos setups peleaban por el unico slot .old con perdida silenciosa).
+# flock(1) no-bloqueante sobre ${ARXY_ROOT%/*}/.lock (== $ARXY_DATA/.lock en
+# produccion; no usar $ARXY_DATA directo: ver cuerpo): tomado, muere claro.
+# Reentrante en el mismo proceso (doctor --apply -> cmd_install comparten
+# el fd); el lock vive hasta el exit (cierre implicito). Tomar DESPUES de
+# need_root (el re-exec pierde fds... salvo heredados, y el padre-usuario
+# no debe bloquear). Fuera: fase AUR como usuario (dirs unicos por PID;
+# su fase privilegiada entra por cmd_install_file, que si lo toma).
+data_lock() {
+    [[ -n "${ARXY_LOCK_FD:-}" ]] && return 0 # ya tomado (anidado)
+    # OJO: derivar de ARXY_ROOT, NO de ARXY_DATA (los tests exportan ROOT
+    # tras sourcear y DATA queda rancio al default real: el lock caeria en
+    # /var/lib/arxy. En produccion son identicos: DATA="${ROOT%/*}").
+    local lf="${ARXY_ROOT%/*}/.lock"
+    mkdir -p "${ARXY_ROOT%/*}" 2>/dev/null || die "no pude crear ${ARXY_ROOT%/*} (¿permisos?)"
+    # OJO: este exec va PELADO (sin 2>/dev/null ni ||): cualquier redireccion
+    # extra persistiria en la shell (el stderr moria para siempre y los die
+    # salian mudos, cazado por T8). Si no se abre, bash muere con su error
+    # (caso ya roto: sin escritura en DATA no hay operacion posible).
+    exec {ARXY_LOCK_FD}>"$lf"
+    [[ -n "${ARXY_LOCK_FD:-}" ]] || die "no pude abrir lock $lf (¿permisos?)"
+    flock -n "$ARXY_LOCK_FD" 2>/dev/null || die "otra operacion arxy en curso (lock $lf); reintenta cuando termine"
+}
 
 # Sin tty (scripts, pipes) pacman no puede preguntar: confirmar solo.
 # Uso: nc_args <nombre-array>; luego "${arr[@]}".
@@ -679,6 +706,7 @@ sig_check_compat() { # die si pin + required (fail closed: required exige firma)
 }
 cmd_setup() {
     need_root
+    data_lock # Q4-H1: serializar ops con estado (slot .old unico)
     need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA"
@@ -855,6 +883,7 @@ cmd_setup() {
 # Restaura la imagen anterior guardada por setup (una generacion).
 cmd_rollback() {
     need_root
+    data_lock # Q4-H1
     [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
     if [[ -d "$ARXY_ROOT" ]]; then
         local aside="$ARXY_ROOT.swap.$$"
@@ -890,6 +919,7 @@ cmd_gc() { # [--json] [--apply [--yes]]
         esac
     done
     [[ -n "$apply" ]] && need_root
+    [[ -n "$apply" ]] && data_lock # Q4-H1: solo el apply muta (dry-run libre)
     local pkgdir="$ARXY_ROOT/var/cache/pacman/pkg"
     local old="$ARXY_ROOT.old"
     local old_present=false old_valid=false old_size=0
@@ -1137,6 +1167,8 @@ cmd_install() {
         [[ "$g" == -* ]] && die "opcion no soportada en install: '$g'"
         case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
+    need_root
+    data_lock # Q4-H1 (la fase AUR-usuario no lo toma: entra por __install-file)
     ensure_image
     # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
     # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
@@ -1393,6 +1425,7 @@ SHIM
 cmd_install_file() {
     need_root
     [[ $# -eq 1 && -f "${1:-}" ]] || die "uso interno: $PROG __install-file <paquete.pkg.tar.zst>"
+    data_lock # Q4-H1: fase privilegiada del flujo AUR (corre como root)
     ensure_image
     local file="$1"
     [[ "$file" == "$ARXY_BUILD"/* ]] && file="$NS_BUILD${file#$ARXY_BUILD}"
@@ -1416,6 +1449,7 @@ cmd_remove() {
         check_pkg_name "$_r"
     done
     need_root
+    data_lock # Q4-H1
     ensure_image
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
     local -a nc
@@ -1433,6 +1467,7 @@ cmd_remove() {
 
 cmd_update() {
     need_root
+    data_lock # Q4-H1
     ensure_image
     local -a nc
     nc_args nc
@@ -1453,6 +1488,7 @@ cmd_clean() { # [--apply]
     [[ "${1:-}" == "--apply" ]] && apply=1
     [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
     [[ -z "${2:-}" ]] || die "uso: $PROG clean [--apply]"
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply borra .old (dry-run libre)
     local r p a d o f
     r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
     p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"
@@ -2294,6 +2330,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
     if [[ -n "$apply" && "$(id -u)" -ne 0 ]]; then
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
     local fid out st reason would opt
     echo "fixes available: ${#FIX_IDS[@]}"
     for fid in "${FIX_IDS[@]}"; do

@@ -100,5 +100,19 @@ grep -qE '"applied_bytes": [0-9]+' <<<"$out" && ok "T7 applied_bytes numero" || 
 [[ ! -d "$R.old" ]] && ok "T7 purga hecha" || no "T7 purga hecha"
 clean
 
+echo "== T8: lock tomado -> apply muere claro sin tocar (Q4-H1)"
+clean; mkroot "$R"; mkroot "$R.old"; echo x > "$R.old/usr/bin/bash"
+# Los T0-T7 directos dejaron ARXY_LOCK_FD tomado en esta shell (reentrancia):
+# soltarlo para que solo el lock-padre de abajo bloquee.
+exec {ARXY_LOCK_FD}>&- 2>/dev/null || true; unset ARXY_LOCK_FD
+exec {_tfd}>"$D/.lock" && flock -n "$_tfd" || no "T8 setup lock"
+out="$(cmd_gc --apply --yes 2>&1)"; rc=$?
+exec {_tfd}>&-; unset _tfd
+[[ $rc -ne 0 ]] && grep -q "otra operacion" <<<"$out" && ok "T8 contencion muere claro" || no "T8 contencion ($rc: $out)"
+[[ -d "$R.old" ]] && ok "T8 no toco .old" || no "T8 toco .old"
+cmd_gc --apply --yes >/dev/null 2>&1
+[[ ! -d "$R.old" ]] && ok "T8 control purga" || no "T8 control purga"
+clean
+
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

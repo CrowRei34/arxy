@@ -164,6 +164,8 @@ cmd_install() {
         [[ "$g" == -* ]] && die "opcion no soportada en install: '$g'"
         case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
+    need_root
+    data_lock # Q4-H1 (la fase AUR-usuario no lo toma: entra por __install-file)
     ensure_image
     # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
     # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
@@ -420,6 +422,7 @@ SHIM
 cmd_install_file() {
     need_root
     [[ $# -eq 1 && -f "${1:-}" ]] || die "uso interno: $PROG __install-file <paquete.pkg.tar.zst>"
+    data_lock # Q4-H1: fase privilegiada del flujo AUR (corre como root)
     ensure_image
     local file="$1"
     [[ "$file" == "$ARXY_BUILD"/* ]] && file="$NS_BUILD${file#$ARXY_BUILD}"
@@ -443,6 +446,7 @@ cmd_remove() {
         check_pkg_name "$_r"
     done
     need_root
+    data_lock # Q4-H1
     ensure_image
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
     local -a nc
@@ -460,6 +464,7 @@ cmd_remove() {
 
 cmd_update() {
     need_root
+    data_lock # Q4-H1
     ensure_image
     local -a nc
     nc_args nc
@@ -480,6 +485,7 @@ cmd_clean() { # [--apply]
     [[ "${1:-}" == "--apply" ]] && apply=1
     [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
     [[ -z "${2:-}" ]] || die "uso: $PROG clean [--apply]"
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply borra .old (dry-run libre)
     local r p a d o f
     r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
     p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"

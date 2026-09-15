@@ -197,6 +197,7 @@ sig_check_compat() { # die si pin + required (fail closed: required exige firma)
 }
 cmd_setup() {
     need_root
+    data_lock # Q4-H1: serializar ops con estado (slot .old unico)
     need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA"
@@ -373,6 +374,7 @@ cmd_setup() {
 # Restaura la imagen anterior guardada por setup (una generacion).
 cmd_rollback() {
     need_root
+    data_lock # Q4-H1
     [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
     if [[ -d "$ARXY_ROOT" ]]; then
         local aside="$ARXY_ROOT.swap.$$"
@@ -408,6 +410,7 @@ cmd_gc() { # [--json] [--apply [--yes]]
         esac
     done
     [[ -n "$apply" ]] && need_root
+    [[ -n "$apply" ]] && data_lock # Q4-H1: solo el apply muta (dry-run libre)
     local pkgdir="$ARXY_ROOT/var/cache/pacman/pkg"
     local old="$ARXY_ROOT.old"
     local old_present=false old_valid=false old_size=0

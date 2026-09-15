@@ -234,6 +234,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
     if [[ -n "$apply" && "$(id -u)" -ne 0 ]]; then
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
+    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
     local fid out st reason would opt
     echo "fixes available: ${#FIX_IDS[@]}"
     for fid in "${FIX_IDS[@]}"; do
