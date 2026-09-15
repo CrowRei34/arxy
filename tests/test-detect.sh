@@ -16,12 +16,19 @@ export -f detect_libc detect_nvidia_ver detect_kmods detect_dev_nodes
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
 
-t() { # t <nombre> <esperado> -- <bash -c ...>
+t() { # t <nombre> <esperado> -- <bash -c ...> : contenido + rc 0 (M10: sin || true global)
     local name="$1" want="$2"; shift 2; shift
-    local got
-    got="$("$@" 2>/dev/null || true)"
-    if [[ "$got" == "$want" ]]; then echo "PASS: $name";
-    else echo "FAIL: $name (quiero '$want', tengo '$got')"; FAIL=$((FAIL+1)); fi
+    local got rc
+    got="$("$@")" 2>/dev/null; rc=$?
+    if [[ $rc -eq 0 && "$got" == "$want" ]]; then echo "PASS: $name";
+    else echo "FAIL: $name (quiero '$want' rc 0, tengo '$got' rc $rc)"; FAIL=$((FAIL+1)); fi
+}
+te() { # te <nombre> <rc> -- <bash -c ...> : vacio + rc exacto (ausencia legitima vs crash)
+    local name="$1" wantrc="$2"; shift 2; shift
+    local got rc
+    got="$("$@")" 2>/dev/null; rc=$?
+    if [[ $rc -eq "$wantrc" && -z "$got" ]]; then echo "PASS: $name";
+    else echo "FAIL: $name (quiero vacio rc $wantrc, tengo '$got' rc $rc)"; FAIL=$((FAIL+1)); fi
 }
 
 # --- libc: el host dice la verdad; los mocks fuerzan cada rama
@@ -45,7 +52,7 @@ printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14  ...\n' > "$D/
 printf '550.54.14\n' > "$D/nv2/sys/module/nvidia/version"
 t "nvidia desde proc" "550.54.14" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv1" detect_nvidia_ver'
 t "nvidia desde sys" "550.54.14" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/nv2" detect_nvidia_ver'
-t "nvidia ausente vacía" "" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/empty" detect_nvidia_ver || true'
+te "nvidia ausente vacía" 1 -- bash -c 'ARXY_SYS_ROOT="'"$D"'/empty" detect_nvidia_ver'
 mkdir -p "$D/nv3/proc/driver/nvidia" "$D/nv3/sys/module/nvidia"
 : > "$D/nv3/proc/driver/nvidia/version"
 printf '560.35.03\n' > "$D/nv3/sys/module/nvidia/version"
@@ -62,14 +69,14 @@ else echo "FAIL: nvidia ausente rc=1 (tengo '$r')"; FAIL=$((FAIL+1)); fi
 mkdir -p "$D/k1/sys/module/fuse" "$D/k1/proc/sys/vm" "$D/k1dev"
 touch "$D/k1/proc/sys/vm/unprivileged_userfaultfd"
 t "kmods fuse+userfaultfd" "fuse userfaultfd" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/k1" ARXY_DEV_PATH="'"$D"'/k1dev" detect_kmods'
-t "kmods vacío" "" -- bash -c 'ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/empty" detect_kmods'
+te "kmods vacío" 0 -- bash -c 'ARXY_SYS_ROOT="'"$D"'/empty" ARXY_DEV_PATH="'"$D"'/empty" detect_kmods'
 mkdir -p "$D/dev/dri"
 touch "$D/dev/dri/card0" "$D/dev/dri/renderD128" "$D/dev/nvidia0" "$D/dev/fuse"
 t "dev nodes" "$D/dev/dri/card0
 $D/dev/dri/renderD128
 $D/dev/nvidia0
 $D/dev/fuse" -- bash -c 'ARXY_DEV_PATH="'"$D"'/dev" detect_dev_nodes'
-t "dev vacío" "" -- bash -c 'ARXY_DEV_PATH="'"$D"'/empty" detect_dev_nodes'
+te "dev vacío" 0 -- bash -c 'ARXY_DEV_PATH="'"$D"'/empty" detect_dev_nodes'
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL
