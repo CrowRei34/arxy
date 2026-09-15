@@ -1232,12 +1232,13 @@ aur_build() { # <pkg> -> ruta paquete construido
         # Subpaquetes del mismo pkgbase (ej. bcompare -> bcompare-kde5) no
         # estan en repos: se excluyen, makepkg/pacman arbitran el resto.
         selfpkgs="$(grep -E '^[[:space:]]*pkgname =' "$work_host/.SRCINFO" 2>/dev/null | sed 's/.*=[[:space:]]*//' | sort -u || true)"
-        for d in $md; do
+        # Listas linea-a-linea: while-read (for partiria por espacios/globs).
+        while IFS= read -r d; do
             d="${d%%[<>=]*}" # quita restricciones de version (gcc>=13 -> gcc)
             [[ -z "$d" ]] && continue
             grep -qxF "$d" <<<"$selfpkgs" 2>/dev/null && continue
             in_bwrap /usr/bin/pacman -Q "$d" >/dev/null 2>&1 || missing+=("$d")
-        done
+        done <<<"$md"
         if [[ "${#missing[@]}" -gt 0 ]]; then
             # OJO: esto corre dentro de f="$(aur_build ...)": todo a stderr
             # o el stdout (ruta del .pkg) se contamina y el install falla.
@@ -1339,10 +1340,13 @@ SHIM
     f=""
     while IFS= read -r cand; do
         ok=1
-        for sib in $sibs; do
+        # sibs tambien linea-a-linea (pkgname con espacios no existe, pero
+        # el for mentiria igual ante un .SRCINFO hostil).
+        while IFS= read -r sib; do
+            [[ -z "$sib" ]] && continue
             [[ "$sib" == "$pkg" ]] && continue
             [[ "${cand##*/}" == "$sib"-* ]] && { ok=0; break; }
-        done
+        done <<<"$sibs"
         [[ $ok -eq 1 ]] && { f="$cand"; break; }
     done < <(ls -t "$work_host"/*.pkg.tar.zst 2>/dev/null || true)
     [[ -n "${f:-}" && -f "$f" ]] || die "makepkg no produjo paquete para $pkg"
