@@ -495,6 +495,8 @@ emit_hardware_json() {
     printf ', "seccomp": %s' "$(json_bool "$(probe_seccomp)")"
     printf ', "mount_setattr_method": "kernel-version>=5.12"'
     printf ', "seccomp_method": "kernel-version>=3.17"'
+    printf ', "cgroupv2": %s' "$(json_bool "$(probe_cgroupv2)")"
+    printf ', "cgroupv2_method": "cgroup2fs-en-/sys/fs/cgroup"'
     printf ', "landlock": {"available": %s, "abi": null}' "$(json_bool "$(probe_landlock)")"
     printf ', "gpu": {"vendor": "%s", "driver": null, "render_node": %s}' "$gv" "$(json_str_or_null "$rn")"
     printf ', "nvidia": {"present": %s, "version": %s, "usable": %s, "reason": %s}' \

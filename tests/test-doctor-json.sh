@@ -50,7 +50,7 @@ else echo "FAIL: json exit ($_jrc) != texto ($_trc)"; FAIL=$((FAIL+1)); fi
 if grep -q '"format": 1' <<<"$_json"; then echo "PASS: json format 1";
 else echo "FAIL: json format 1"; FAIL=$((FAIL+1)); fi
 for _k in level libc kernel userns overlayfs_rootless mount_setattr seccomp \
-          mount_setattr_method seccomp_method \
+          mount_setattr_method seccomp_method cgroupv2 cgroupv2_method \
           landlock gpu nvidia kmods dev rootfs fixes_available fixes_applied fixes signature; do
     if grep -q "\"$_k\":" <<<"$_json"; then echo "PASS: json key $_k";
     else echo "FAIL: json key $_k"; FAIL=$((FAIL+1)); fi
@@ -85,6 +85,7 @@ assert d["format"] == 1, "format"
 assert d["level"] in (1, 2), "level"
 assert d["libc"]["kind"] in ("glibc", "musl", "unknown"), "libc.kind"
 assert isinstance(d["userns"], bool), "userns"
+assert isinstance(d["cgroupv2"], bool), "cgroupv2"
 assert isinstance(d["kmods"], list) and d["kmods"] == sorted(d["kmods"]), "kmods ordenado"
 assert isinstance(d["dev"]["dri"], list) and d["dev"]["dri"] == sorted(d["dev"]["dri"]), "dri ordenado"
 assert isinstance(d["fixes_available"], list) and isinstance(d["fixes_applied"], list), "fixes"
