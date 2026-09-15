@@ -12,10 +12,12 @@ maintainer="SrDicov <https://github.com/SrDicov>"
 license="MIT"
 homepage="https://github.com/SrDicov/arxy"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
+# arxy.pub NO es conf_files: es trust root y el paquete la renueva.
 conf_files="/etc/arxy/arxy.conf"
 
 do_install() {
 	vbin ${FILESDIR}/arxy
 	ln -sf arxy ${DESTDIR}/usr/bin/axy
 	vinstall ${FILESDIR}/arxy.conf 644 etc/arxy/
+	vinstall ${FILESDIR}/arxy.pub 644 etc/arxy/
 }

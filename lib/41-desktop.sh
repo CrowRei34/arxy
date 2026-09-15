@@ -149,7 +149,7 @@ desktop_migrate_auto() { # tras install/update: aviso a stderr, nunca falla
 cmd_desktop() { # desktop --migrate
     case "${1:-}" in
         --migrate) cmd_desktop_migrate ;;
-        *) die "uso: $PROG desktop --migrate" ;;
+        *) die "uso: $PROG desktop --migrate (ver: $PROG help)" ;;
     esac
 }
 

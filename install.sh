@@ -33,6 +33,7 @@ done
 
 [[ -f "$SRC_DIR/src/arxy" ]] || { echo "no se encuentra src/arxy (ejecuta desde la raiz del repo)" >&2; exit 1; }
 [[ -f "$SRC_DIR/config/arxy.conf" ]] || { echo "no se encuentra config/arxy.conf" >&2; exit 1; }
+[[ -f "$SRC_DIR/config/arxy.pub" ]] || { echo "no se encuentra config/arxy.pub" >&2; exit 1; }
 
 install -d -m755 "$BIN_DST" "$CONF_DST"
 install -m755 "$SRC_DIR/src/arxy" "$BIN_DST/arxy"
@@ -50,4 +51,6 @@ else
     install -m644 "$SRC_DIR/config/arxy.conf" "$CONF_DST/arxy.conf"
     echo "arxy instalado en $BIN_DST (arxy + axy)"
 fi
+# La pubkey NO es config de usuario: siempre se instala (trust root Fase 7).
+install -m644 "$SRC_DIR/config/arxy.pub" "$CONF_DST/arxy.pub"
 echo "Siguiente: sudo arxy setup"

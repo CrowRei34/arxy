@@ -155,6 +155,40 @@ migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)
     write_version "$url" "" "$date" 2>/dev/null || msg "aviso: no pude migrar version a JSON" >&2
     return 0
 }
+
+verify_signature() { # <tarball> <sig> <pub> -> 0 ok, 1 invalida, 2 sin minisign, 3 sin pub, 4 sin sig
+    local tarball="$1" sig="$2" pub="$3"
+    command -v minisign >/dev/null 2>&1 || return 2
+    [[ -n "${pub:-}" && -f "$pub" ]] || return 3
+    [[ -n "${sig:-}" && -f "$sig" && -s "$sig" ]] || return 4
+    minisign -V -p "$pub" -m "$tarball" -x "$sig" >/dev/null 2>&1 || return 1
+    return 0
+}
+
+enforce_signature_policy() { # <rc> : aplica ARXY_SIGNATURE_POLICY (die, warn o sigue)
+    local rc="${1:-1}" pol="${ARXY_SIGNATURE_POLICY:-optional}"
+    case "$pol" in
+        required)
+            [[ "$rc" == 0 ]] || die "firma minisign no valida (rc=$rc, policy=required)" ;;
+        optional)
+            case "$rc" in
+                0) : ;;
+                2) msg "aviso: sin minisign en el host, omitiendo verificacion de firma" >&2 ;;
+                *) die "firma minisign no valida (rc=$rc, policy=optional)" ;;
+            esac ;;
+        off) : ;;
+        *) die "ARXY_SIGNATURE_POLICY invalida: '$pol' (required|optional|off)" ;;
+    esac
+    return 0
+}
+
+sig_should_verify() { # 0 = descargar .minisig y verificar, 1 = omitir
+    local pol="${ARXY_SIGNATURE_POLICY:-optional}"
+    [[ "$pol" == off ]] && return 1
+    [[ -n "${ARXY_IMAGE_SHA256:-}" ]] && return 1 # el pin ya ancla
+    case "${ARXY_IMAGE_URL:-}" in http://*|https://*) return 0 ;; esac
+    return 1 # file:// y demas: desarrollo local, sin release que firmarlo
+}
 cmd_setup() {
     need_root
     need_cmd curl tar sha256sum zstd
@@ -162,11 +196,12 @@ cmd_setup() {
     mkdir -p "$ARXY_DATA"
     install -d -m1777 "$ARXY_BUILD" # compilacion AUR como usuario (makepkg prohibe root)
     install -d -m1777 "$ARXY_BUILD/aur" # idem para workdirs (si lo crea root, el usuario no puede escribir)
-    local tmp sha_tmp img_sha=""
+    local tmp sha_tmp sig_tmp img_sha=""
     tmp="$(mktemp "$ARXY_DATA/.image.partial.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
+    sig_tmp="$(mktemp "$ARXY_DATA/.arxy-sig.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     # shellcheck disable=SC2064
-    trap "rm -f '$tmp' '$sha_tmp'" EXIT
+    trap "rm -f '$tmp' '$sha_tmp' '$sig_tmp'" EXIT
     msg "descargando imagen..."
     curl -fL --retry 3 -o "$tmp" "$ARXY_IMAGE_URL" || die "no se pudo descargar la imagen (¿red? reintenta, o usa ARXY_IMAGE_URL=file:///ruta/al/tarball)"
     data_sync "$tmp" "$ARXY_DATA" # lo hasheado es lo que hay en disco
@@ -190,6 +225,37 @@ cmd_setup() {
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion"
         fi
     fi
+    # Firma minisign (Fase 7): segundo factor sobre sha256. Solo http(s) sin
+    # pin (.minisig publicado junto al tarball; arxy-image lo firma en CI).
+    # file:// es desarrollo local y el pin ya ancla: se omiten con aviso.
+    local sig_policy="${ARXY_SIGNATURE_POLICY:-optional}" sig_verified=0
+    case "$sig_policy" in
+        required|optional|off) : ;;
+        *) die "ARXY_SIGNATURE_POLICY invalida: '$sig_policy' (required|optional|off)" ;;
+    esac
+    if sig_should_verify; then
+        local sig_url="${ARXY_IMAGE_URL%%\?*}"
+        sig_url="${sig_url%%\#*}.minisig"
+        local sig_pub="${ARXY_SYS_CONF%/*}/arxy.pub" sig_rc=0
+        if curl -fLs --retry 2 -o "$sig_tmp" "$sig_url" 2>/dev/null && [[ -s "$sig_tmp" ]]; then
+            verify_signature "$tmp" "$sig_tmp" "$sig_pub" || sig_rc=$?
+            enforce_signature_policy "$sig_rc"
+            if [[ "$sig_rc" == 0 ]]; then
+                msg "firma minisign valida"
+                sig_verified=1
+            fi
+        else
+            # Sin .minisig publicado: como "ausente" (rc 4).
+            enforce_signature_policy 4
+        fi
+    elif [[ "$sig_policy" == off ]]; then
+        msg "firmas: omitidas (ARXY_SIGNATURE_POLICY=off)"
+    elif [[ -n "$ARXY_IMAGE_SHA256" ]]; then
+        msg "firmas: omitidas (ARXY_IMAGE_SHA256 pineado ya ancla)"
+    else
+        msg "firmas: omitidas (URL no http(s), desarrollo local)"
+    fi
+    printf '%s' "$sig_verified" >"$ARXY_DATA/.arxy-sig" 2>/dev/null || true
     # Extraer a staging y validar ANTES de tocar lo instalado: setup atomico.
     # Si algo falla aqui, la instalacion actual sigue intacta.
     local stage="$ARXY_ROOT.new.$$"
@@ -200,7 +266,7 @@ cmd_setup() {
         # busybox-tar sin soporte zstd: descomprimir con zstd primero
         zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "$stage"; die "extraccion fallo"; }
     fi
-    rm -f "$tmp" "$sha_tmp"
+    rm -f "$tmp" "$sha_tmp" "$sig_tmp"
     trap - EXIT
     # Destinos de bind que la imagen quiza no trae (bwrap exige que existan
     # dentro): /host y el build dir AUR. Sin esto TODO falla en bwrap.

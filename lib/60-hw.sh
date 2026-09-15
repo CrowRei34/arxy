@@ -504,7 +504,12 @@ emit_hardware_json() {
         "$ARXY_ROOT" "$(json_bool "$(image_ok && echo 1 || echo 0)")" "$(json_str_or_null "$rver")"
     printf ', "fixes_available": %s' "$( { tr ' ' '\n' <<<"$fixes" | grep . | sort || true; } | json_arr)"
     printf ', "fixes": %s' "$(fixes_json)"
-    printf ', "fixes_applied": []}\n'
+    printf ', "fixes_applied": []'
+    local sig_pol="${ARXY_SIGNATURE_POLICY:-optional}" sig_avail=0 sig_last=0
+    command -v minisign >/dev/null 2>&1 && sig_avail=1
+    [[ "$(cat "$ARXY_DATA/.arxy-sig" 2>/dev/null || true)" == 1 ]] && sig_last=1
+    printf ', "signature": {"policy": %s, "minisign_available": %s, "last_setup_verified": %s}}\n' \
+        "$(json_str "$sig_pol")" "$(json_bool "$sig_avail")" "$(json_bool "$sig_last")"
     return $ok
 }
 

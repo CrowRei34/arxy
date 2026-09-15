@@ -43,6 +43,7 @@ _restore_frozen() { # el env congelado manda sobre cualquier fichero.
 ARXY_ROOT="${ARXY_ROOT:-/var/lib/arxy/root}"
 ARXY_IMAGE_URL="${ARXY_IMAGE_URL:-}"
 ARXY_IMAGE_SHA256="${ARXY_IMAGE_SHA256:-}"
+ARXY_SIGNATURE_POLICY="${ARXY_SIGNATURE_POLICY:-optional}" # required|optional|off (Fase 7)
 
 ARXY_SYS_CONF="/etc/arxy/arxy.conf"
 ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"

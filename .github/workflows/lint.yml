@@ -30,4 +30,5 @@ jobs:
         run: |
           cmp src/arxy packaging/void/arxy/files/arxy
           cmp config/arxy.conf packaging/void/arxy/files/arxy.conf
+          cmp config/arxy.pub packaging/void/arxy/files/arxy.pub
           echo SYNC_OK

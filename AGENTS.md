@@ -13,7 +13,7 @@ y `~/.config/arxy/config`. Precedencia: **env > user-conf > sys-conf**
 ```bash
 make src/arxy && git diff --exit-code src/arxy   # D9: lib/ genera src/arxy byte-idéntico
 bash -n lib/*.sh src/arxy install.sh && shellcheck -S warning src/arxy install.sh
-cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/void/arxy/files/arxy.conf  # lo verifica lint.yml
+cmp src/arxy packaging/void/arxy/files/arxy && cmp config/arxy.conf packaging/void/arxy/files/arxy.conf && cmp config/arxy.pub packaging/void/arxy/files/arxy.pub  # lo verifica lint.yml
 ```
 
 - Un commit por tarea, mensaje con el porqué.
@@ -179,6 +179,24 @@ Build imagen: `sudo -n PROFILE=arxy ./create-*.sh` (asignar tras sudo:
 bajo L2 ni instala paquetes con `.desktop` en L2. El caso se validó
 en el ciclo 6.5.5 a mano; endurecer la matrix es tarea de v1.0.x.
 *← 3884404 se cazó por ciclo desde cero, no por CI.*
+
+## Firmas minisign (Fase 7)
+
+- Tarball firmado en CI (`arxy-image/build.yml`, secret `MINISIGN_SECRET`);
+  `.minisig` publicado junto a `.tar.zst`/`.sha256`. Sin secret no hay
+  release (el publish aborta).
+- Trust root: `config/arxy.pub` (Key ID `1D21DD5964A3A1B0`), canónica +
+  copiada por `make sync` a `packaging/void/…/files/` (tercer `cmp` en
+  lint). Rotar = nuevo par + secret y pub juntos (commits por repo).
+- `setup` verifica si `sig_should_verify()` (http(s) sin pin; `file://`
+  y pin omiten con aviso). Estados `verify_signature`: 0 ok, 1 inválida,
+  2 sin minisign, 3 sin pub, 4 sin `.minisig`. `enforce` + `sig_should_verify`
+  son unit-testeables sin root (fake `minisign()` por función).
+- Política `ARXY_SIGNATURE_POLICY=required|optional|off` (default
+  `optional`, precedencia env > user > sys como el resto; inválida = die).
+  Firma inválida/ausente = die salvo `off`; solo minisign-ausente +
+  `optional` = warn. Estado en `$ARXY_DATA/.arxy-sig` (`1` solo si
+  minisign verificó); `doctor --json` lo expone aditivo (`format: 1` intacto).
 
 ## No resucitar sin contexto
 

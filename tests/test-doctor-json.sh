@@ -51,7 +51,7 @@ if grep -q '"format": 1' <<<"$_json"; then echo "PASS: json format 1";
 else echo "FAIL: json format 1"; FAIL=$((FAIL+1)); fi
 for _k in level libc kernel userns overlayfs_rootless mount_setattr seccomp \
           mount_setattr_method seccomp_method \
-          landlock gpu nvidia kmods dev rootfs fixes_available fixes_applied fixes; do
+          landlock gpu nvidia kmods dev rootfs fixes_available fixes_applied fixes signature; do
     if grep -q "\"$_k\":" <<<"$_json"; then echo "PASS: json key $_k";
     else echo "FAIL: json key $_k"; FAIL=$((FAIL+1)); fi
 done
@@ -59,6 +59,8 @@ if grep -Eq '"kind": "(glibc|musl|unknown)"' <<<"$_json"; then echo "PASS: json 
 else echo "FAIL: json libc.kind válido"; FAIL=$((FAIL+1)); fi
 if grep -Eq '"level": [12]' <<<"$_json"; then echo "PASS: json level válido";
 else echo "FAIL: json level válido"; FAIL=$((FAIL+1)); fi
+if grep -Eq '"signature": \{"policy": "(required|optional|off)", "minisign_available": (true|false), "last_setup_verified": (true|false)\}' <<<"$_json"; then echo "PASS: json signature válido";
+else echo "FAIL: json signature válido"; FAIL=$((FAIL+1)); fi
 _j2="$("$BIN" doctor --json 2>/dev/null || true)"
 if [[ "$_json" == "$_j2" ]]; then echo "PASS: json determinista";
 else echo "FAIL: json determinista"; FAIL=$((FAIL+1)); fi
@@ -88,6 +90,10 @@ assert isinstance(d["dev"]["dri"], list) and d["dev"]["dri"] == sorted(d["dev"][
 assert isinstance(d["fixes_available"], list) and isinstance(d["fixes_applied"], list), "fixes"
 assert isinstance(d["landlock"], dict) and d["landlock"]["abi"] is None, "landlock"
 assert isinstance(d["nvidia"], dict) and isinstance(d["nvidia"]["usable"], bool), "nvidia"
+assert isinstance(d["signature"], dict), "signature"
+assert d["signature"]["policy"] in ("required", "optional", "off"), "signature.policy"
+assert isinstance(d["signature"]["minisign_available"], bool), "signature.minisign_available"
+assert isinstance(d["signature"]["last_setup_verified"], bool), "signature.last_setup_verified"
 ' 2>/dev/null; then echo "PASS: json parseo estricto + tipos";
     else echo "FAIL: json parseo estricto + tipos"; FAIL=$((FAIL+1)); fi
 else

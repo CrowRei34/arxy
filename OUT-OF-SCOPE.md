@@ -112,3 +112,10 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 X11 bridge / Wayland isolation no se implementan en bash (Fase 6b,
 Go/C). Patrón `narrowedTo` (§12): diferido con upgrade identificado;
 solo cuando un consumidor real lo pida. `xdg-open` cubre `gio`.
+
+## 15. Anclaje anti-downgrade (Fase 7b)
+
+La firma minisign (Fase 7) autentica el tarball pero no su frescura:
+un `latest` antiguo firmado seguiría verificando. Upgrade: estado
+firmado `{format, sha256, timestamp}` + refusar timestamp menor, solo
+cuando un consumidor real lo pida (hoy `setup` siempre quiere latest).
