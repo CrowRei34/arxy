@@ -34,7 +34,7 @@ cmd_export() {
         elif [[ -f "$1" ]]; then
             srcs=("$1")
         else
-            die "no existe: $1"
+            die "no existe paquete ni archivo '$1' (buscado como paquete y en $ARXY_ROOT/usr/share/applications/; prueba '$PROG search $1')"
         fi
     else
         local d

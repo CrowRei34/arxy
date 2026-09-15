@@ -38,7 +38,7 @@ no() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 
 echo "== T1: setup con ENOSPC muere con mensaje claro"
 out="$(cmd_setup 2>&1)"; rc=$?
-[[ $rc -ne 0 ]] && grep -q "extraccion fallo" <<<"$out" && ok "T1 muere limpio" || no "T1 muere limpio (rc=$rc $out)"
+[[ $rc -ne 0 ]] && grep -q "no pude extraer la imagen" <<<"$out" && ok "T1 muere limpio" || no "T1 muere limpio (rc=$rc $out)"
 
 echo "== T2: root viejo intacto tras el fallo"
 _image_ok "$ARXY_ROOT" && [[ "$(cat "$ARXY_ROOT/.mark")" == viejo ]] && ok "T2 root intacto" || no "T2 root intacto"

@@ -143,7 +143,7 @@ cmd_host_bridge() { # [--daemon|--stop|--status] [--socket P] [--allowed-cmd B..
                     _i=0
                     while [[ $_i -lt 50 ]] && bridge_pid_alive "$pidf"; do sleep 0.1; _i=$((_i+1)); done
                 fi
-                bridge_pid_alive "$pidf" && die "no pude detener el daemon (sigue vivo)"
+                bridge_pid_alive "$pidf" && die "no pude detener el daemon pid $(cat "$pidf" 2>/dev/null) en $sock (sigue vivo tras TERM/KILL; revisa con 'ps -p $(cat "$pidf" 2>/dev/null)')"
                 rm -f "$pidf" "${pidf}.lock"
                 echo "detenido"
             else

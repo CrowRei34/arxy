@@ -45,6 +45,6 @@ cmd_search_aur() {
         --data-urlencode "by=name-desc" --data-urlencode "arg=$q" \
         https://aur.archlinux.org/rpc/ 2>/dev/null | \
     in_sys /usr/bin/jq -r '.results[] | "\(.Name) \(.Version) [votos:\(.NumVotes) popularidad:\(.Popularity|floor)]\n    \(.Description // "")"' 2>/dev/null || \
-        die "fallo la busqueda AUR (¿red?)"
+        die "fallo la busqueda AUR de '$q' en https://aur.archlinux.org/rpc/ (¿red? cero resultados no es error)"
 }
 

@@ -22,7 +22,7 @@ cmd_gpu_stack() { # <gpu-amd|gpu-nvidia>
     local -a nc
     nc_args nc
     if ! run_pacman -Qq llvm-libs >/dev/null 2>&1; then
-        pacman_mut -S "${nc[@]}" mesa || die "gpu: pacman fallo"
+        pacman_mut -S "${nc[@]}" mesa || die "fallo al instalar el stack gpu 'mesa' en '$ARXY_ROOT' (¿red? reintenta '$PROG install gpu-amd|gpu-nvidia' o corre '$PROG doctor')"
     fi
     clean_pkg_cache
     msg "gpu: stack completo instalado (${1:-})"
@@ -182,7 +182,7 @@ cmd_install() {
     [[ "${#pkgs[@]}" -gt 0 ]] || return 0
     local -a nc
     nc_args nc
-    pacman_mut -S --needed "${nc[@]}" "${pkgs[@]}" || die "pacman fallo"
+    pacman_mut -S --needed "${nc[@]}" "${pkgs[@]}" || die "fallo 'pacman -S' de '${pkgs[*]}' en '$ARXY_ROOT' (mira el error de pacman arriba; ¿red, lock o nombre?)"
     clean_pkg_cache
     local p
     for p in "${pkgs[@]}"; do
@@ -229,7 +229,7 @@ cmd_install_aur() {
         [[ "$p" =~ ^[a-zA-Z0-9@._+-]+$ ]] && rm -rf "${ARXY_BUILD:?}/aur/$p" 2>/dev/null || true
     done
     if [[ "${#failed[@]}" -gt 0 ]]; then
-        die "fallaron: ${failed[*]}"
+        die "no pude construir/instalar AUR: '${failed[*]}' (mira los errores de arriba; reintenta de a uno con '$PROG install --aur <paquete>')"
     fi
     # Hook como usuario sin $ARXY_DATA escribible: salto silencioso (el proximo
     # install/update como root ya cubre todo /usr; avisar aqui seria ruido).
@@ -257,7 +257,7 @@ ensure_aur_env() {
     if [[ "${#missing_tools[@]}" -gt 0 ]]; then
         msg "herramientas AUR que faltan: ${missing_tools[*]}" >&2
         as_root "$SELF" install "${missing_tools[@]}" >&2 || \
-            die "no pude instalar herramientas AUR"
+            die "no pude instalar herramientas AUR '${missing_tools[*]}' (mira el error de pacman de arriba)"
     fi
     if in_sys /usr/bin/paru --version >/dev/null 2>&1; then
         HAVE_PARU=1
@@ -274,7 +274,7 @@ ensure_aur_env() {
 check_pkg_name() { # <pkg> : charset Arch ([a-z0-9@._+-], mayusculas toleradas); muere si trae / o vacio (A3: el rm -rf de aur_build no debe salir del dir AUR)
     # Primer caracter anclado (P6-H3): "-flag"/"--" evadian por el guion.
     local pkg="${1:-}"
-    [[ "$pkg" =~ ^[A-Za-z0-9@._+][A-Za-z0-9@._+-]*$ ]] || die "nombre de paquete invalido: '$pkg'"
+    [[ "$pkg" =~ ^[A-Za-z0-9@._+][A-Za-z0-9@._+-]*$ ]] || die "nombre de paquete invalido: '$pkg' (solo [a-zA-Z0-9@._+-], sin '/' ni flags, sin '-' inicial)"
 }
 aur_build() { # <pkg> -> ruta paquete construido
     local pkg="$1" f
@@ -400,7 +400,7 @@ SHIM
     # shellcheck disable=SC2086 # $pgp_args vacio debe desaparecer, no llegar como ""
     in_bwrap /usr/bin/bash -c "export PATH='$work_ns/bin:$PATH'; cd '$work_ns' && exec /usr/bin/makepkg --config '$work_ns/makepkg-arxy.conf' --noconfirm $pgp_args" >&2 && build_ok=1
     rm -rf "${work_host:?}/bin" # shims solo para este build: fuera siempre
-    [[ $build_ok -eq 1 ]] || die "fallo al compilar $pkg"
+    [[ $build_ok -eq 1 ]] || die "fallo al compilar '$pkg' con makepkg (mira el error de arriba; el codigo queda en '$ARXY_BUILD/aur/$pkg' para depurar)"
     # Paquetes divididos (pkgbase con subpaquetes como bcompare-mate):
     # elegir el .pkg del nombre pedido, excluyendo a los hermanos. El glob
     # "$pkg-*" casaria tambien con "$pkg-<hermano>-*", asi que se filtra.
@@ -435,7 +435,7 @@ cmd_install_file() {
     [[ "$file" == "$ARXY_BUILD"/* ]] && file="$NS_BUILD${file#$ARXY_BUILD}"
     local -a nc
     nc_args nc
-    pacman_mut -U --needed "${nc[@]}" "$file" || die "pacman -U fallo"
+    pacman_mut -U --needed "${nc[@]}" "$file" || die "fallo 'pacman -U' de '$file' (mira el error de arriba; ¿dependencias, firma o espacio?)"
     clean_pkg_cache
     local name
     name="$(in_sys /usr/bin/pacman -Qp "$file" 2>/dev/null | awk '{print $1}')"
@@ -458,7 +458,7 @@ cmd_remove() {
     # Igual que install (P6-H2): sin flags a pacman privilegiado.
     local -a nc
     nc_args nc
-    pacman_mut -Rns "${nc[@]}" "$@" || die "pacman fallo"
+    pacman_mut -Rns "${nc[@]}" "$@" || die "fallo 'pacman -Rns' de '$*' en '$ARXY_ROOT' (mira el error de pacman arriba)"
     local p f
     for p in "$@"; do
         [[ "$p" == -* ]] && continue
@@ -475,7 +475,7 @@ cmd_update() {
     ensure_image
     local -a nc
     nc_args nc
-    pacman_mut -Syu "${nc[@]}" || die "pacman fallo"
+    pacman_mut -Syu "${nc[@]}" || die "fallo 'pacman -Syu' en '$ARXY_ROOT' (¿red o lock? mira el error de arriba)"
     clean_pkg_cache
     desktop_migrate_auto || true
     [[ -z "${ARXY_NO_AUTO_DEDUP:-}" ]] && do_dedup auto

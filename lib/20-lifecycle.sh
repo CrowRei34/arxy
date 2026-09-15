@@ -272,7 +272,7 @@ cmd_setup() {
     msg "extrayendo en $stage..."
     if ! tar -xpf "$tmp" -C "$stage" 2>/dev/null; then
         # busybox-tar sin soporte zstd: descomprimir con zstd primero
-        zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "${stage:?}"; die "extraccion fallo"; }
+        zstd -dc "$tmp" | tar -xp -C "$stage" || { rm -rf "${stage:?}"; die "no pude extraer la imagen en $stage (¿descarga truncada o sin ~1GB libre? reintenta; lo instalado sigue intacto)"; }
     fi
     rm -f "$tmp" "$sha_tmp" "$sig_tmp"
     trap - EXIT
@@ -367,7 +367,7 @@ cmd_setup() {
     # Antes del -Sy: describe lo instalado aunque falle la red. Nunca falla setup.
     write_hardware_json "$(emit_hardware_json 2>/dev/null || true)"
     msg "sincronizando bases de pacman..."
-    pacman_mut -Sy || die "pacman -Sy fallo"
+    pacman_mut -Sy || die "fallo 'pacman -Sy' en $ARXY_ROOT (¿red o DNS? reintenta '$PROG setup' o revisa '$PROG doctor')"
     msg "imagen lista en $ARXY_ROOT"
 }
 
@@ -378,11 +378,11 @@ cmd_rollback() {
     [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
     if [[ -d "$ARXY_ROOT" ]]; then
         local aside="$ARXY_ROOT.swap.$$"
-        mv "$ARXY_ROOT" "$aside" || die "no pude apartar la instalacion actual"
-        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || { mv "$aside" "$ARXY_ROOT"; die "rollback a medias: original restaurado"; }
+        mv "$ARXY_ROOT" "$aside" || die "no pude apartar $ARXY_ROOT a $aside (¿permisos o espacio? revisa y reintenta; lo instalado sigue intacto)"
+        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || { mv "$aside" "$ARXY_ROOT"; die "rollback incompleto a $ARXY_ROOT.old (deje el original en su sitio; revisa espacio/permisos y reintenta '$PROG rollback')"; }
         mv "$aside" "$ARXY_ROOT.old"
     else
-        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "rollback fallo"
+        mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "no pude restaurar $ARXY_ROOT.old a $ARXY_ROOT (¿permisos? rescata a mano con 'mv')"
     fi
     # version viaja DENTRO del root (Commit 6): el swap la rota sola, sin
     # copias. Si el root restaurado es pre-Commit 6 (sin version dentro),
