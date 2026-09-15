@@ -106,7 +106,7 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 - ICD Vulkan 32-bit (§4): manifiesto + loader cuando haya caso real.
 - DDX Xorg anidado (§5): montar `xorg/modules` si hay X anidado.
 - glvnd vendors (§6): `--ro-bind-data` como los ICDs.
-- `\n` en nombres bajo `/usr` (`pkg_desktops`): `find -print0` si
+- `\n` en nombres bajo `/usr` (`do_dedup`): `find -print0` si
   aparece un caso real.
 - TOCTOU realpath→execv (`bridge/arxy-bridged.c`): `openat2` con
   `RESOLVE_*` o `fexecve` si hay caso real.
