@@ -142,3 +142,21 @@ simplicidad atómica. Upgrade: snapshots btrfs/ZFS o múltiples links,
 solo si la demanda lo exige.
 
 - **z-repo noarch support**: z-repo/check_outdated.py silently skips packages with `archs="noarch"`. As a workaround, arxy's template drops `noarch` and builds for all architectures natively (e.g. x86_64 and x86_64-musl). This results in duplicated CI builds for architecture-independent packages. Fixing this requires modifying check_outdated.py in z-repo. Upgrade path: cuando z-repo soporte noarch, restaurar el canonical a archs="noarch".
+
+## Verificación end-to-end en Void Linux
+
+Los paquetes publicados en z-repo (arxy-0.5.0_N.x86_64.xbps,
+arxy-0.5.0_N.x86_64-musl.xbps) son compilados y firmados por
+GitHub Actions, y validados por `check_outdated.py` de z-repo. Sin
+embargo, la instalación + ejecución end-to-end en un host Void
+real no se verifica en CI.
+
+Upgrade path: cuando haya acceso a un host Void (VM, contenedor),
+correr:
+  sudo xbps-install -S arxy
+  arxy version --verbose
+  arxy doctor --json
+y reportar.
+
+Riesgo actual: bajo. El delta entre 0.5.0_1 y 0.5.0_2 son fixes UX
+de H13 sin cambios estructurales.
