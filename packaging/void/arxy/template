@@ -6,14 +6,14 @@ version=0.6.0
 revision=1
 # archs="noarch"  # noarch no soportado por z-repo/check_outdated.py (skipped silencioso)
 # build_style=meta # build_style=meta deprecado en xbps-src, reemplazado por instalación directa (FILESDIR)
-short_desc="Subsistema Arch minimalista para correr software glibc en cualquier distro"
+short_desc="Subsistema Arch para correr software glibc en cualquier distro"
 maintainer="Dicov <srdicov@gmail.com>"
 license="GPL-3.0-or-later"
-homepage="https://github.com/SrDicov/arxy"
 depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils minisign sudo"
+homepage="https://github.com/SrDicov/arxy"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
 # arxy.pub NO es conf_files: es trust root y el paquete la renueva.
-# R5-H2: sin bridge (equivale a install.sh --without-bridge; el daemon
+# Sin bridge (equivale a install.sh --without-bridge; el daemon
 # requiere compilar bridge/ aparte). Siguiente tras instalar: sudo arxy setup.
 conf_files="/etc/arxy/arxy.conf"
 
