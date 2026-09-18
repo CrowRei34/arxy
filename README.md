@@ -77,7 +77,7 @@ Arrancar el subsistema tiene un coste casi nulo. La imagen no es más que un *ro
 * **Nivel 1** (bwrap + user namespaces): El comportamiento por defecto y el recomendado.
 * **Nivel 2** (sin namespaces): Utiliza `run` inyectando el `ld-linux` del subsistema, e `install` tirando de `chroot` clásico con sudo. Está pensado para kernels *hardened* o entornos de contenedores donde `bwrap` está capado. El sistema detecta automáticamente qué nivel usar (lo puedes ver con `arxy doctor`), pero puedes forzarlo exportando `ARXY_LEVEL=1|2`.
 
-## Limitaciones conocidas (transparencia ante todo)
+## Limitaciones conocidas:
 
 * **AMD/NVIDIA: El soporte teórico existe, pero nos faltan pruebas en hardware real.** Si `arxy doctor` detecta tu tarjeta dedicada, `install gpu-amd` o `gpu-nvidia` intentarán instalar el `mesa` oficial (que incluye LLVM, a diferencia del `mesa-mini` que viene por defecto) levantando el bloqueo de `IgnorePkg=mesa` (son unos ~170MB extra). El mecanismo está implementado, pero no tenemos métricas de éxito empíricas aún.
 * **Drivers propietarios de NVIDIA:** Fuera del alcance de la versión 1.x. Por ahora, solo soportamos Nouveau a través de Mesa.
