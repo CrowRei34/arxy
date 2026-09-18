@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # arxy — subsistema Arch minimalista para correr software glibc en cualquier distro.
 #
@@ -43,7 +44,7 @@ _restore_frozen() { # el env congelado manda sobre cualquier fichero.
 ARXY_ROOT="${ARXY_ROOT:-/var/lib/arxy/root}"
 ARXY_IMAGE_URL="${ARXY_IMAGE_URL:-}"
 ARXY_IMAGE_SHA256="${ARXY_IMAGE_SHA256:-}"
-ARXY_SIGNATURE_POLICY="${ARXY_SIGNATURE_POLICY:-optional}" # required|optional|off (Fase 7)
+ARXY_SIGNATURE_POLICY="${ARXY_SIGNATURE_POLICY:-optional}" # required|optional|off
 
 ARXY_SYS_CONF="/etc/arxy/arxy.conf"
 ARXY_USER_CONF="${XDG_CONFIG_HOME:-$HOME/.config}/arxy/config"
@@ -77,7 +78,7 @@ if [[ "$(id -u)" -eq 0 && "$REAL_HOME" != "$HOME" ]]; then
 fi
 unset _frozen_val
 
-# Q6-H9: vacio no es "unset" (:- los confunde y DATA/BUILD/VFILE caerian
+# vacio no es "unset" (:- los confunde y DATA/BUILD/VFILE caerian
 # a rutas reales creyendo aislar). Tras ambos restores, vacio muere claro
 # (die aun no existe aqui: echo+exit con el mismo prefijo).
 if [[ -z "${ARXY_ROOT:-}" ]]; then
@@ -90,11 +91,11 @@ fi
 # apuntaba al conf pero DATA/VFILE/BUILD seguian del sys-conf (split-brain:
 # setup extraia en un root y escribia version/level2-rc en otro).
 ARXY_DATA="${ARXY_ROOT%/*}"              # /var/lib/arxy
-# version DENTRO del root (Commit 6): nace en el staging y el rename la
+# version DENTRO del root: nace en el staging y el rename la
 # publica junto a la imagen — nunca hay root nuevo con version vieja ni al
 # reves, y el rollback la rota sola. El env manda (tests la aislan).
 : "${ARXY_VERSION_FILE:=$ARXY_ROOT/var/lib/arxy/version}"
-# Ruta pre-Commit 6 (fuera del root): solo se lee para adoptar una vez y
+# Ruta del formato anterior (fuera del root): solo se lee para adoptar una vez y
 # borrar; el codigo nuevo jamas la escribe (una sola verdad).
 : "${ARXY_VERSION_LEGACY:=$ARXY_DATA/version}"
 ARXY_BUILD="$ARXY_DATA/build"              # dir de compilacion AUR (1777)
@@ -160,7 +161,7 @@ _image_ok() { # <dir>: valida un rootfs (instalado o en staging)
 }
 image_ok() { _image_ok "$ARXY_ROOT"; }
 
-# Lock advisory unico para ops con estado (Q4-H1: setup/rollback/gc-apply/
+# Lock advisory unico para ops con estado (setup/rollback/gc-apply/
 # clean-apply/install/remove/update/doctor-apply corrian sin serializar;
 # dos setups peleaban por el unico slot .old con perdida silenciosa).
 # flock(1) no-bloqueante sobre ${ARXY_ROOT%/*}/.lock (== $ARXY_DATA/.lock en
@@ -179,7 +180,7 @@ data_lock() {
     mkdir -p "${ARXY_ROOT%/*}" 2>/dev/null || die "no pude crear ${ARXY_ROOT%/*} (¿permisos?)"
     # OJO: este exec va PELADO (sin 2>/dev/null ni ||): cualquier redireccion
     # extra persistiria en la shell (el stderr moria para siempre y los die
-    # salian mudos, cazado por T8). Si no se abre, bash muere con su error
+    # salian mudos, cazado en tests). Si no se abre, bash muere con su error
     # (caso ya roto: sin escritura en DATA no hay operacion posible).
     exec {ARXY_LOCK_FD}>"$lf"
     [[ -n "${ARXY_LOCK_FD:-}" ]] || die "no pude abrir lock $lf (¿permisos?)"

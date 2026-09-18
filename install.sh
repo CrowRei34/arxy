@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# SPDX-License-Identifier: GPL-3.0-or-later
 #
 # install.sh — instalador generico de arxy para cualquier distro.
 # (En Void se recomienda el paquete xbps de packaging/void en su lugar.)
@@ -10,7 +11,7 @@
 #   ./install.sh --without-bridge        # omite el daemon
 #
 # Instala: bin/arxy (+ symlink axy) y etc/arxy.conf.
-# Con el daemon host-bridge salvo --without-bridge (Fase 5).
+# Con el daemon host-bridge salvo --without-bridge.
 # La configuracion existente NO se sobrescribe (se deja .nuevo al lado).
 
 set -euo pipefail
@@ -43,7 +44,7 @@ done
 [[ -f "$SRC_DIR/config/arxy.conf" ]] || { echo "no se encuentra config/arxy.conf" >&2; exit 1; }
 [[ -f "$SRC_DIR/config/arxy.pub" ]] || { echo "no se encuentra config/arxy.pub" >&2; exit 1; }
 
-# R5-H1: fallar ANTES de copiar nada si la sysconf no es escribible (antes
+# fallar ANTES de copiar nada si la sysconf no es escribible (antes
 # dejaba binarios a medias + error crudo de install(1)). Sube al primer
 # ancestro existente para no romper DESTDIR staging aun no creado.
 _conf_probe="$CONF_DST"
@@ -66,6 +67,6 @@ else
     install -m644 "$SRC_DIR/config/arxy.conf" "$CONF_DST/arxy.conf"
     echo "arxy instalado en $BIN_DST (arxy + axy)"
 fi
-# La pubkey NO es config de usuario: siempre se instala (trust root Fase 7).
+# La pubkey NO es config de usuario: siempre se instala (trust root).
 install -m644 "$SRC_DIR/config/arxy.pub" "$CONF_DST/arxy.pub"
 echo "Siguiente: sudo arxy setup"

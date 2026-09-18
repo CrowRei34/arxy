@@ -1,22 +1,23 @@
-// arxy-bridged — spike D1: prototipo del daemon host-bridge de arxy.
-// Clona el protocolo de hrun: framing 4B big-endian + JSON, MaxFrame 128KiB,
+// SPDX-License-Identifier: GPL-3.0-or-later
+// arxy-bridged — daemon host-bridge de arxy.
+// Protocolo: framing 4B big-endian + JSON, MaxFrame 128KiB,
 // mensajes request/input/close-input/resize/output/error/exit, auth SO_PEERCRED
 // (uid peer == getuid()) + token opcional del daemon (--token; NULL = sin
 // exigir, compat tests; ver OUT-OF-SCOPE §12), socket 0600, allowlist por
 // realpath + X_OK, límites.
 // C11/POSIX, solo libc, sin dependencias externas.
 // Uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]
-// DEUDA Fase 5 (auditoría pre-commit; el spike se commitea tal cual):
-// BLOQUEANTES resueltos en Commit 14 (con tests en bridge/test-bridge.sh):
+// DEUDA (auditoría pre-commit):
+// BLOQUEANTES resueltos (con tests en bridge/test-bridge.sh):
 //  1. jskip con tope JSON_MAX_DEPTH (era recursivo sin tope).
 //  2. resolve_cmd rechaza relativo con '/' y componentes PATH no absolutos.
 //  3. Strict JSON: claves desconocidas y basura tras '}' se rechazan.
 //  4. \u subrogados se combinan (huérfanos se rechazan).
 // HARDENING (no bloqueante):
-// ponytail: TOCTOU realpath->execv; upgrade: openat2 RESOLVE_* o fexecve.
-// ponytail: EINTR en drenaje final; upgrade: reintentar read en [done].
-// ponytail: padding base64 interior laxo; upgrade: exigir '=' solo al final.
-// ponytail: off-by-one 65/64 en parse (inocuo: authorize() limita a MAXARGS).
+// TODO: TOCTOU realpath->execv; upgrade: openat2 RESOLVE_* o fexecve.
+// TODO: EINTR en drenaje final; upgrade: reintentar read en [done].
+// TODO: padding base64 interior laxo; upgrade: exigir '=' solo al final.
+// TODO: off-by-one 65/64 en parse (inocuo: authorize() limita a MAXARGS).
 #define _GNU_SOURCE
 #define _POSIX_C_SOURCE 200809L
 #define _XOPEN_SOURCE 700
@@ -47,7 +48,7 @@
 #define MAXARGSZ 4096 // spec D1: 4KiB por arg (hrun usa 16KiB)
 #define CHUNK 32768 // lectura salida hijo (b64 cabe holgado en MaxFrame)
 #define INQUEUEMAX (4u * 1024u * 1024u) // tope de stdin pendiente
-// Magia centralizada (P5-H9: estaba duplicada en session/resize/listener):
+// Magia centralizada (estaba duplicada en session/resize/listener):
 #define WS_MAXDIM 65536 // tope de columna/fila pedida
 #define WS_DEF_COLS 80 // defecto como xterm
 #define WS_DEF_ROWS 24
@@ -66,7 +67,7 @@ static const char *g_sockpath;
 static const char *g_token = NULL; // NULL = sin exigir (compat tests sin token)
 
 static void die(const char *m) { fprintf(stderr, "arxy-bridged: %s\n", m); exit(1); }
-static char diebuf[512]; // Q5-H21: mensajes die() con contexto (path+strerror)
+static char diebuf[512]; // mensajes die() con contexto (path+strerror)
 static void usage(void) { fprintf(stderr, "uso: arxy-bridged --socket PATH --allowed-cmd BIN [...]\n"); }
 
 // ---------- io ----------
@@ -625,7 +626,7 @@ static void handle(int cfd) {
     const char *why = "bad request";
     char *abs = NULL;
     // Token solo en request (lo que ejecuta): input/resize van en una
-    // conexion ya aceptada por UID (Commit 17 refina por instancia).
+    // conexion ya aceptada por UID (sin refino por instancia: ver OUT-OF-SCOPE §12).
     if (!ok && !strcmp(q.type, "request")) {
         if (g_token && (!q.token || strcmp(q.token, g_token))) why = "bad token";
         else abs = authorize(q.cmd, q.clen, q.ncmd, &why);
@@ -661,7 +662,7 @@ static int secure_listen(const char *path) {
     if (stat(dir, &st) || st.st_uid != getuid()) die("socket dir not owned by you");
     unlink(path); // stale de un apagado sucio
     int ls = socket(AF_UNIX, SOCK_STREAM, 0);
-    // Q5-H21: con path+strerror (antes indistinguible stale vs permisos).
+    // con path+strerror (antes indistinguible stale vs permisos).
     if (ls < 0) { snprintf(diebuf, sizeof diebuf, "socket failed for '%s': %s", path, strerror(errno)); die(diebuf); }
     struct sockaddr_un a; memset(&a, 0, sizeof a);
     a.sun_family = AF_UNIX;

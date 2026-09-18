@@ -8,7 +8,7 @@ revision=2
 # build_style=meta # build_style=meta deprecado en xbps-src, reemplazado por instalación directa (FILESDIR)
 short_desc="Subsistema Arch minimalista para correr software glibc en cualquier distro"
 maintainer="Dicov <srdicov@gmail.com>"
-license="MIT"
+license="GPL-3.0-or-later"
 homepage="https://github.com/SrDicov/arxy"
 depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils minisign sudo"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
