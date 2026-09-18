@@ -6,7 +6,9 @@ de seguridad** (compat-glibc, no aislamiento). Escribe solo en
 `/var/lib/arxy` (rootfs, `root.old` de rollback, `version`, estado) y
 `~/.local/share/applications/arxy-*.desktop`; lee `/etc/arxy/arxy.conf`
 y `~/.config/arxy/config`. Precedencia: **env > user-conf > sys-conf**
-(env congelado en `_restore_frozen`, `lib/00-head.sh:29`).
+(env congelado en `_restore_frozen`, `lib/00-head.sh:29`). **Para contratos
+arquitectónicos y convenciones de código (ej. variables globales, lazy-init),
+lee `HACKING.md`.**
 
 ## Puerta antes de commit
 
