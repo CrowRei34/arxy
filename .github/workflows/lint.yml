@@ -9,7 +9,7 @@ jobs:
   shell:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install shellcheck
         run: sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
@@ -39,7 +39,7 @@ jobs:
     # test-signature.sh ejecuten (no SKIP) en cada push/PR.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install minisign
         run: sudo apt-get update -qq && sudo apt-get install -y -qq minisign
