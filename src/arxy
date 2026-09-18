@@ -653,6 +653,7 @@ version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
     fi
     echo "url=$u date=$d"
 }
+# ponytail: deuda viva. Remover en v0.6.0 o cuando no haya instalaciones v0.1 activas.
 migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)
     local f="$ARXY_VERSION_FILE"
     [[ -f "$f" ]] || return 0
