@@ -51,7 +51,8 @@ out="$(cmd_gc --json)"
 grep -q '"root_old": {"present": true, "valid": true' <<<"$out" && ok "T1 json present+valid" || no "T1 json present+valid"
 grep -q '"staging": {"entries": 0' <<<"$out" && ok "T1 json staging keys" || no "T1 json staging keys"
 grep -q '"hint": "arxy gc --apply libera [0-9]* bytes (incluye rollback recuperable)"' <<<"$out" && ok "T1 hint accionable" || no "T1 hint accionable"
-if ( cmd_gc --apply </dev/null >/dev/null 2>&1 ); then no "T1 sin tty no purga"; else ok "T1 sin tty no purga"; fi
+out_err="$(cmd_gc --apply </dev/null 2>&1 || true)"
+grep -q "exige tty (usa --yes para no-interactivo)" <<<"$out_err" && ok "T1 sin tty no purga y avisa" || no "T1 sin tty no purga y avisa ($out_err)"
 [[ -d "$R.old" ]] && ok "T1 sin tty no toca" || no "T1 sin tty no toca"
 cmd_gc --apply --yes >/dev/null 2>&1
 [[ ! -d "$R.old" ]] && ok "T1 --yes purga" || no "T1 --yes purga"

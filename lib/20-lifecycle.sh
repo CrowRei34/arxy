@@ -443,12 +443,12 @@ cmd_gc() { # [--json] [--apply [--yes]]
     local applied=false applied_bytes=0
     if [[ -n "$apply" ]]; then
         if [[ "$old_present" == true && "$old_valid" == true && -z "$yes" ]]; then
-            [[ -t 0 ]] || die "gc --apply con rollback válido exige tty (repite con --yes)"
+            [[ -t 0 ]] || die "gc --apply con rollback válido exige tty (usa --yes para no-interactivo)"
             local ans=""
             read -r -p "¿purgar $total bytes (incluye $old, recuperable con rollback)? [s/N] " ans
             if [[ "$ans" != [sS]* ]]; then msg "nada purgado"; return 0; fi
         elif (( total > 104857600 )) && [[ -z "$yes" ]]; then
-            [[ -t 0 ]] || die "gc --apply de mas de 100 MB exige tty (repite con --yes)"
+            [[ -t 0 ]] || die "gc --apply de mas de 100 MB exige tty (usa --yes para no-interactivo)"
             local ans=""
             read -r -p "¿purgar $total bytes? [s/N] " ans
             if [[ "$ans" != [sS]* ]]; then msg "nada purgado"; return 0; fi
