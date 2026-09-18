@@ -3,14 +3,14 @@
 #   ./xbps-src pkg arxy
 pkgname=arxy
 version=0.5.0
-revision=1
-archs="noarch"
-build_style=meta
-depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils sudo"
+revision=2
+# archs="noarch"  # noarch no soportado por z-repo/check_outdated.py (skipped silencioso)
+# build_style=meta # build_style=meta deprecado en xbps-src, reemplazado por instalación directa (FILESDIR)
 short_desc="Subsistema Arch minimalista para correr software glibc en cualquier distro"
-maintainer="SrDicov <https://github.com/SrDicov>"
+maintainer="Dicov <srdicov@gmail.com>"
 license="MIT"
 homepage="https://github.com/SrDicov/arxy"
+depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils minisign sudo"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
 # arxy.pub NO es conf_files: es trust root y el paquete la renueva.
 # R5-H2: sin bridge (equivale a install.sh --without-bridge; el daemon
