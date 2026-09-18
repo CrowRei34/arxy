@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-arxy-gaming.sh — rewrite arxy-gaming (Commit 12): vendor, pin NVIDIA,
+# test-arxy-gaming.sh — rewrite arxy-gaming: vendor, pin NVIDIA,
 # dry-run puro, multilib, particion oficial/AUR. Sin root ni red: todo con
 # stubs y fixtures en /tmp (pacman/cmd_gpu_stack/export stubbed).
 set -uo pipefail
@@ -14,7 +14,7 @@ HERE="$(dirname "$0")"
 # shellcheck source=../lib/30-package.sh
 . "$HERE/../lib/30-package.sh" >/dev/null 2>&1
 # shellcheck source=../lib/10-level.sh
-. "$HERE/../lib/10-level.sh" >/dev/null 2>&1 # level() para T15 (Q4-H5)
+. "$HERE/../lib/10-level.sh" >/dev/null 2>&1 # level() para T15 ()
 
 D="$(mktemp -d)"
 trap 'rm -rf "$D"' EXIT
@@ -48,7 +48,7 @@ no() { echo "FAIL: $1"; FAIL=$((FAIL+1)); }
 echo "== T0: sin GPU decidible falla claro"
 out="$(ARXY_SYS_DRM_PATH="$D/empty" ARXY_DEV_PATH="$D/empty" cmd_install arxy-gaming 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "GPU no detectada" <<<"$out" && ok "T0 rc+mensaje" || no "T0 rc+mensaje (rc=$rc)"
-# R5-H4: no sugerir --aur draft inexistente; pedir vendor explicito.
+# no sugerir --aur draft inexistente; pedir vendor explicito.
 ! grep -q -- "--aur arxy-gaming" <<<"$out" && grep -q "arxy-gaming intel|amd|nvidia --dry-run" <<<"$out" && ok "T0b sin --aur, con vendor" || no "T0b sin --aur, con vendor ($out)"
 
 echo "== T1/T2: dry-run por vendor"
@@ -104,14 +104,14 @@ for p in "../x" "/etc" "" "a b" 'a;b' 'a$(x)' "-flag" "--"; do (check_pkg_name "
 echo "== T12: rm -rf destructivos llevan :? (tripwire A3)"
 grep -q 'rm -rf "${R:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${R:?}.old"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${stage:?}"' "$HERE/../lib/20-lifecycle.sh" && grep -q 'rm -rf "${work_host:?}"' "$HERE/../lib/30-package.sh" && ok "T12 :? presente" || no "T12 :? presente"
 
-echo "== T12b: ningun rm -rf sobre var pelada en lib/ (Q2-H9)"
+echo "== T12b: ningun rm -rf sobre var pelada en lib/ ()"
 # Todo rm -rf exige :? o :- o guarda [[ -n ... ]] en la misma linea.
 # Excepciones justificadas: 60-hw.sh (rama mkdir-fallo: mktemp pudo
 # fallar y hay que retornar 0) y el trap de do_dedup con -n explicito.
 bad12b="$(grep -hE 'rm -rf "\$[A-Za-z_]' "$HERE"/../lib/20-lifecycle.sh "$HERE"/../lib/30-package.sh "$HERE"/../lib/60-hw.sh | grep -v ':?\|:-\|\[\[ -n' || true)"
 [[ -z "$bad12b" ]] && ok "T12b rm -rf con guarda" || no "T12b sin guarda: $bad12b"
 
-echo "== T13: barridos prefieren /usr/bin sobre /usr/local (Q2-H2 shadow)"
+echo "== T13: barridos prefieren /usr/bin sobre /usr/local ( shadow)"
 # Un binario viejo en /usr/local hacia shadow al empaquetado y resucitaba
 # bugs (EPERM pre-Commit-18); el orden /usr/bin primero lo impide.
 ord13=1
@@ -121,7 +121,7 @@ for _f13 in "$HERE/../lib/50-run.sh" "$HERE/../lib/41-desktop.sh"; do
 done
 [[ $ord13 -eq 1 ]] && ok "T13 orden /usr/bin primero" || no "T13 orden"
 
-echo "== T14: install/remove validan nombres antes de root/red (Q6-H9/H11/H13)"
+echo "== T14: install/remove validan nombres antes de root/red"
 out="$(cmd_install "" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ! grep -q "PACMAN_MUT" <<<"$out" && ok "T14 install vacio muere pre-red" || no "T14 install vacio ($rc: $out)"
 out="$(cmd_install "my app" 2>&1)"; rc=$?
@@ -129,7 +129,7 @@ out="$(cmd_install "my app" 2>&1)"; rc=$?
 out="$(cmd_remove "" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T14 remove vacio muere claro" || no "T14 remove vacio ($rc: $out)"
 
-echo "== T15: gaming en L2 muere antes de aplicar (Q4-H5)"
+echo "== T15: gaming en L2 muere antes de aplicar ()"
 # Sin esto la parte oficial aplicaba y la AUR abortaba (medio-estado).
 # _ARXY_LEVEL es memoizado por proceso: reset para que ARXY_LEVEL mande.
 unset _ARXY_LEVEL

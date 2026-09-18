@@ -1,7 +1,7 @@
 # --- setup: descarga + verifica + extrae la imagen (corre como root)
-# version estructurado (Commit 5, format 1). El plano legacy (url=/date=) se
+# version estructurado (format 1). El plano legacy (url=/date=) se
 # acepta al leer y se migra al escribir. Sin jq: printf al emitir, grep al leer.
-# --- setup atomico (Commit 6): invariante = SIGKILL en cualquier punto deja
+# --- setup atomico: invariante = SIGKILL en cualquier punto deja
 # el sistema recuperable en la siguiente invocacion (ver recover_staging).
 # Orden: descarga -> fsync -> sha -> staging -> fsync -> version DENTRO del
 # staging -> fsync -> rotacion via .old.tmp.$$ -> rename (publica imagen+
@@ -136,7 +136,7 @@ version_field() { # <url|date> : valor (JSON o plano); rc 1 si falta
 version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
     local u d
     u="$(version_field url || true)"; d="$(version_field date || true)"
-    # R3-H6: lectura con fichero corrupto daba campos vacios sin pista
+    # lectura con fichero corrupto daba campos vacios sin pista
     # (el proximo setup lo regeneraba con aviso, pero el usuario cansado
     # no lo veia). Avisar a stderr sin tocar stdout.
     if [[ -f "$ARXY_VERSION_FILE" && -z "$u$d" ]]; then
@@ -144,7 +144,7 @@ version_line() { # "url=... date=..." (ambos formatos; vacio si falta)
     fi
     echo "url=$u date=$d"
 }
-# ponytail: deuda viva. Remover en v0.6.0 o cuando no haya instalaciones v0.1 activas.
+# TODO: deuda viva. Remover en v0.6.0 o cuando no haya instalaciones v0.1 activas.
 migrate_version_file() { # plano -> JSON atomico; idempotente; rc 0 (avisa)
     local f="$ARXY_VERSION_FILE"
     [[ -f "$f" ]] || return 0
@@ -204,7 +204,7 @@ sig_check_compat() { # die si pin + required (fail closed: required exige firma)
 }
 cmd_setup() {
     need_root
-    data_lock # Q4-H1: serializar ops con estado (slot .old unico)
+    data_lock # serializar ops con estado (slot .old unico)
     need_cmd curl tar sha256sum zstd
     [[ -n "$ARXY_IMAGE_URL" ]] || die "ARXY_IMAGE_URL vacio. Edita $ARXY_SYS_CONF y pon la URL del tarball."
     mkdir -p "$ARXY_DATA"
@@ -214,7 +214,7 @@ cmd_setup() {
     tmp="$(mktemp "$ARXY_DATA/.image.partial.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sha_tmp="$(mktemp "$ARXY_DATA/.arxy-sha.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
     sig_tmp="$(mktemp "$ARXY_DATA/.arxy-sig.XXXXXX")" || die "no pude crear temporal en $ARXY_DATA"
-    # Q2-H8: este trap EXIT no guarda/restaura el del llamador a proposito
+    # este trap EXIT no guarda/restaura el del llamador a proposito
     # (cmd_setup es toplevel/subshell: no hay trap previo que preservar).
     # shellcheck disable=SC2064
     trap "rm -f '$tmp' '$sha_tmp' '$sig_tmp'" EXIT
@@ -241,7 +241,7 @@ cmd_setup() {
             msg "aviso: sin ARXY_IMAGE_SHA256 ni .sha256 en el release, omitiendo verificacion" >&2
         fi
     fi
-    # Firma minisign (Fase 7): segundo factor sobre sha256. Solo http(s) sin
+    # Firma minisign: segundo factor sobre sha256. Solo http(s) sin
     # pin (.minisig publicado junto al tarball; arxy-image lo firma en CI).
     # file:// es desarrollo local y el pin ya ancla: se omiten con aviso.
     local sig_policy="${ARXY_SIGNATURE_POLICY:-optional}" sig_verified=0
@@ -383,7 +383,7 @@ cmd_setup() {
 # Restaura la imagen anterior guardada por setup (una generacion).
 cmd_rollback() {
     need_root
-    data_lock # Q4-H1
+    data_lock # 
     [[ -d "$ARXY_ROOT.old" ]] || die "no hay rollback pendiente (falta ${ARXY_ROOT}.old)"
     if [[ -d "$ARXY_ROOT" ]]; then
         local aside="$ARXY_ROOT.swap.$$"
@@ -393,10 +393,10 @@ cmd_rollback() {
     else
         mv "$ARXY_ROOT.old" "$ARXY_ROOT" || die "no pude restaurar $ARXY_ROOT.old a $ARXY_ROOT (¿permisos? rescata a mano con 'mv')"
     fi
-    # version viaja DENTRO del root (Commit 6): el swap la rota sola, sin
-    # copias. Si el root restaurado es pre-Commit 6 (sin version dentro),
+    # version viaja DENTRO del root: el swap la rota sola, sin
+    # copias. Si el root restaurado es del formato anterior (sin version dentro),
     # ensure_version la regenera en el proximo uso.
-    # Q4-H3: la atestacion .arxy-sig describe la generacion instalada por
+    # la atestacion .arxy-sig describe la generacion instalada por
     # setup; tras rotar, invalidar (ausente = no verificado, nunca rancio).
     rm -f "$ARXY_DATA/.arxy-sig"
     msg "rollback completo: imagen anterior restaurada en $ARXY_ROOT"
@@ -408,7 +408,7 @@ _gc_bytes() { # <path> : bytes en disco (0 si falta)
     echo "${b:-0}"
 }
 
-# Limpieza con JSON (Commit 8): informa siempre (exit 0); --apply purga.
+# Limpieza con JSON: informa siempre (exit 0); --apply purga.
 # root.old VALIDO exige prompt tty (puede resucitarse) salvo --yes;
 # root.old CORRUPTO se purga sin preguntar (no hay nada que recuperar).
 cmd_gc() { # [--json] [--apply [--yes]]
@@ -422,7 +422,7 @@ cmd_gc() { # [--json] [--apply [--yes]]
         esac
     done
     [[ -n "$apply" ]] && need_root
-    [[ -n "$apply" ]] && data_lock # Q4-H1: solo el apply muta (dry-run libre)
+    [[ -n "$apply" ]] && data_lock # solo el apply muta (dry-run libre)
     local pkgdir="$ARXY_ROOT/var/cache/pacman/pkg"
     local old="$ARXY_ROOT.old"
     local old_present=false old_valid=false old_size=0

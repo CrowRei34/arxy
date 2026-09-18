@@ -1,7 +1,7 @@
 # OUT-OF-SCOPE.md — límites de arxy (documento vivo)
 
-Si no está aquí, no existe como límite conocido. Cada fase que añade un
-`ponytail:` o una desviación lo registra aquí (ver "Tech debt vivo").
+Si no está aquí, no existe como límite conocido. Cada `TODO:` o desviación
+se registra aquí (ver "Tech debt vivo").
 Un reporte "arxy no ejecuta X" se responde con el link a su sección.
 
 ## 1. Anti-cheat a nivel kernel
@@ -26,8 +26,8 @@ escrituras via chroot con sudo) pero exige root para instalar.
 
 ## 4. ICDs Vulkan de 32-bit
 
-Desde Commit 11: `run_in` reescribe el manifiesto al guest segun su
-clase real (`elf_class`; Q1-H2: antes asumia 64-bit y un ICD 32-bit
+`run_in` reescribe el manifiesto al guest segun su
+clase real (`elf_class`; antes asumia 64-bit y un ICD 32-bit
 caia en `lib64`). El loader Vulkan de 32-bit sigue sin soporte en el
 rootfs, asi que apps puras de 32-bit que busquen su propio ICD pueden
 fallar igual. Upgrade: segundo manifiesto + loader 32-bit cuando un
@@ -37,7 +37,7 @@ caso real lo pida.
 
 Las apps X usan el servidor X del host (vía `/tmp/.X11-unix`
 bindeado). No se monta el driver DDX de NVIDIA dentro
-(`ponytail:` en `lib/10-level.sh`). Upgrade: montar
+(`TODO:` en `lib/10-level.sh`). Upgrade: montar
 `xorg/modules` por ruta conocida si alguien corre un X anidado.
 
 ## 6. glvnd `egl_vendor.d`
@@ -70,16 +70,15 @@ provoca crashes GL. Fijar el mirror o esperar al repo.
 ## 10. Hardware no probado
 
 Verificado real: Intel (HD 630: GL + EGL tras
-`install arxy-gaming`; Commit 13; re-verificado en v0.5.0 con Iris en
+`install arxy-gaming`; re-verificado en v0.5.0 con Iris en
 este host). AMD y NVIDIA reales: solo mocks
 (lógica cubierta en `test-gpu-drm.sh`, montajes sin probar en HW).
 
-Sin acceso a ese HW (2026-09-15, solo Intel disponible): si tienes
+Sin acceso a ese HW (solo hay Intel disponible): si tienes
 AMD/NVIDIA, reporta con `arxy doctor --json` + `arxy run eglinfo -B` +
 `arxy run glxinfo -B` + `arxy run vulkaninfo --summary`.
-Upgrade: verificar en HW real cuando haya acceso; si falla, fix de
-Fase 4 en commit con mensaje ampliado. Decisión v0.5.0: 6b fuera
-(§14), 7b diferido hasta usuario real (§15).
+Upgrade: verificar en HW real cuando haya acceso; si falla, fix en
+commit con mensaje ampliado.
 
 ## 11. Tarball vigente con `[multilib]` duplicado
 
@@ -98,12 +97,12 @@ auto-otorgada. La frontera real sigue siendo la allowlist del daemon
 (`--allowed-cmd` al arrancar). Upgrade: credencial padre-fuera-de-banda
 (o techo del registro-raiz contra la allowlist del daemon) + TTL +
 `trap`; solo cuando un consumidor anidado real lo pida (Steam/Proton
-funcionan con el token ambiente, probado e2e en Commit 16).
+funcionan con el token ambiente, probado e2e).
 
-## 13. Tech debt vivo (`ponytail:`)
+## 13. Tech debt vivo (`TODO:`)
 
-`grep -rn 'ponytail:' lib/ tests/ bridge/` es la lista (ver `AGENTS.md`
-"Tech debt grepeable"). Resumen a fecha de cierre de Fase 4:
+`grep -rn 'TODO:' lib/ tests/ bridge/` es la lista (ver `AGENTS.md`
+"Tech debt grepeable"). Resumen:
 
 - ICD Vulkan 32-bit (§4): manifiesto + loader cuando haya caso real.
 - DDX Xorg anidado (§5): montar `xorg/modules` si hay X anidado.
@@ -117,15 +116,15 @@ funcionan con el token ambiente, probado e2e en Commit 16).
 - Off-by-one 65/64 en parse (ídem, inocuo: `authorize()` limita a
   `MAXARGS`).
 
-## 14. Aislamiento GUI (`ARXY_GUI_ISOLATION`, Fase 6b)
+## 14. Aislamiento GUI (`ARXY_GUI_ISOLATION`)
 
-X11 bridge / Wayland isolation no se implementan en bash (Fase 6b,
+X11 bridge / Wayland isolation no se implementan en bash (se harían en
 Go/C). Patrón `narrowedTo` (§12): diferido con upgrade identificado;
 solo cuando un consumidor real lo pida. `xdg-open` cubre `gio`.
 
-## 15. Anclaje anti-downgrade (Fase 7b)
+## 15. Anclaje anti-downgrade
 
-La firma minisign (Fase 7) autentica el tarball pero no su frescura:
+La firma minisign autentica el tarball pero no su frescura:
 un `latest` antiguo firmado seguiría verificando. Upgrade: estado
 firmado `{format, sha256, timestamp}` + refusar timestamp menor, solo
 cuando un consumidor real lo pida (hoy `setup` siempre quiere latest).
@@ -141,7 +140,7 @@ directorios (ej. `.old.1`, `.old.2`), pero el diseño prioriza
 simplicidad atómica. Upgrade: snapshots btrfs/ZFS o múltiples links,
 solo si la demanda lo exige.
 
-- **z-repo noarch support**: z-repo/check_outdated.py silently skips packages with `archs="noarch"`. As a workaround, arxy's template drops `noarch` and builds for all architectures natively (e.g. x86_64 and x86_64-musl). This results in duplicated CI builds for architecture-independent packages. Fixing this requires modifying check_outdated.py in z-repo. Upgrade path: cuando z-repo soporte noarch, restaurar el canonical a archs="noarch".
+- **z-repo noarch support**: `check_outdated.py` de z-repo ignora en silencio los paquetes con `archs="noarch"`. Mientras tanto, el template de arxy evita `noarch` y compila para cada arquitectura (x86_64 y x86_64-musl). Eso duplica builds de CI en paquetes sin arquitectura. Arreglarlo exige tocar `check_outdated.py` en z-repo. Upgrade: cuando z-repo soporte noarch, volver al canónico con `archs="noarch"`.
 
 ## Verificación end-to-end en Void Linux
 
@@ -158,5 +157,5 @@ correr:
   arxy doctor --json
 y reportar.
 
-Riesgo actual: bajo. El delta entre 0.5.0_1 y 0.5.0_2 son fixes UX
-de H13 sin cambios estructurales.
+Riesgo actual: bajo. El delta entre 0.5.0_1 y 0.5.0_2 son fixes de UX
+sin cambios estructurales.

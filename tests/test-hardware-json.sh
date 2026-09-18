@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-hardware-json.sh — escritor/lector de hardware.json (T15, Commit 3).
+# test-hardware-json.sh — escritor/lector de hardware.json.
 # Sin root ni imagen: sourcea lib/ con ARXY_ROOT en /tmp. Mocks de detección
 # en test-detect.sh; aquí el ciclo de vida del fichero (idempotencia,
 # no-reescritura, corrupto, ausente) + que doctor --json no lo muta.

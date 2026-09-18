@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-chroot-dns.sh — fallback DNS en chroot avisa (M5 backlog, MEDIA):
+# test-chroot-dns.sh — fallback DNS en chroot avisa:
 # si bind+copia de resolv.conf fallan, in_chroot avisa a stderr (antes:
 # chroot sin DNS y pacman moria con error de red confuso). mount/chroot/
 # umount stubbed; rootfs y etc en /tmp.

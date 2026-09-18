@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# test-split-brain.sh — Q2-H1: el env congelado manda y los derivados
-# cuelgan del ROOT final, en un solo punto (regla 4).
+# test-split-brain.sh — el env congelado manda y los derivados
+# cuelgan del ROOT final, en un solo punto.
 # Sin el orden correcto (_restore_frozen ANTES de derivar, en ambos
 # restores), setup extrae en un root y escribe version/level2-rc en
 # otro, con tests en verde (estado envenenado). Sin root, sin red,
@@ -45,7 +45,7 @@ else
     SKIP=$((SKIP+1))
 fi
 
-# T4: ARXY_ROOT vacio muere en vez de colapsar al real (Q6-H9).
+# T4: ARXY_ROOT vacio muere en vez de colapsar al real.
 if HOME="$D/h1" XDG_CONFIG_HOME="$D/h1/.config" ARXY_ROOT="" bash -c '. "$0" >/dev/null 2>&1' "$LIB" 2>/dev/null; then
     echo "FAIL: T4 ARXY_ROOT vacio aceptado"; FAIL=$((FAIL+1))
 else

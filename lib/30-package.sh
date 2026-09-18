@@ -78,7 +78,7 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     elif ! vendor="$(arxy_gaming_vendor)"; then
         [[ "$(detect_gpu || true)" == nvidia ]] && \
             die "NVIDIA sin driver propietario (¿nouveau?): arxy-gaming exige el modulo propietario"
-        # R5-H4: el consejo apuntaba a '--aur arxy-gaming-intel', que es
+        # el consejo apuntaba a '--aur arxy-gaming-intel', que es
         # draft aun no publicado (falla tras el error). Pedir vendor
         # explicito + dry-run en su lugar.
         die "GPU no detectada (sin drm/dri): indica vendor a mano ('$PROG install arxy-gaming intel|amd|nvidia --dry-run' para ver)"
@@ -97,7 +97,7 @@ cmd_gaming() { # [--dry-run] [nvidia|amd|intel] : rama explicita = override
     fi
     local -a off=() aur=() p
     for p in "${pkgs[@]}"; do case "$p" in *-bin) aur+=("$p") ;; *) off+=("$p") ;; esac; done
-    # Q4-H5: en L2 la parte AUR moriria tras aplicar la oficial (medio-
+    # en L2 la parte AUR moriria tras aplicar la oficial (medio-
     # estado: multilib+mesa instalados, AUR pendiente). Fallar antes de
     # tocar nada (el dry-run ya volvio arriba).
     level 2>/dev/null || true
@@ -163,7 +163,7 @@ cmd_install() {
     fi
     need_root
     [[ $# -ge 1 ]] || die "uso: $PROG install <paquete...>  |  $PROG install --aur <paquete...>"
-    # Q6-H9/H11/H13: validar TODO el argv ANTES de root/red. Un "" o "my app"
+    # validar TODO el argv ANTES de root/red. Un "" o "my app"
     # moria en pacman tras escalar y descargar (~130MB). gpu-amd|gpu-nvidia
     # son virtuales fijos (siempre validos); el resto pasa check_pkg_name.
     local -a pkgs=()
@@ -175,10 +175,10 @@ cmd_install() {
         case "$g" in gpu-amd|gpu-nvidia) gpu_reqs+=("$g") ;; *) check_pkg_name "$g"; pkgs+=("$g") ;; esac
     done
     need_root
-    data_lock # Q4-H1 (la fase AUR-usuario no lo toma: entra por __install-file)
+    data_lock # (la fase AUR-usuario no lo toma: entra por __install-file)
     ensure_image
     # Nombres virtuales GPU (no son paquetes): se resuelven antes de pacman.
-    # Sin flags pacman aqui (P6-H2): "--root"/"--config" llegarian a un
+    # Sin flags pacman aqui (): "--root"/"--config" llegarian a un
     # pacman privilegiado como opciones (incluye --dry-run fuera de gaming).
     local _gr
     for _gr in ${gpu_reqs[@]+"${gpu_reqs[@]}"}; do cmd_gpu_stack "$_gr"; done
@@ -214,7 +214,7 @@ cmd_install_aur() {
     ensure_aur_env
     local p f failed=()
     for p in "$@"; do
-        # Die claro, no skip silencioso (P6-H3: el resumen mentia instalado).
+        # Die claro, no skip silencioso (el resumen mentia instalado).
         [[ "$p" == -* ]] && die "opcion no soportada en AUR: '$p'"
         f="$(aur_build "$p")"
         if [[ -z "${f:-}" || ! -f "$f" ]]; then
@@ -275,7 +275,7 @@ ensure_aur_env() {
 # OJO: todo el ruido del build va a stderr; por stdout SOLO la ruta final,
 # porque el llamador captura con f="$(aur_build ...)" (un subshell).
 check_pkg_name() { # <pkg> : charset Arch ([a-z0-9@._+-], mayusculas toleradas); muere si trae / o vacio (A3: el rm -rf de aur_build no debe salir del dir AUR)
-    # Primer caracter anclado (P6-H3): "-flag"/"--" evadian por el guion.
+    # Primer caracter anclado (): "-flag"/"--" evadian por el guion.
     local pkg="${1:-}"
     [[ "$pkg" =~ ^[A-Za-z0-9@._+][A-Za-z0-9@._+-]*$ ]] || die "nombre de paquete invalido: '$pkg' (solo [a-zA-Z0-9@._+-], sin '/' ni flags, sin '-' inicial)"
 }
@@ -432,7 +432,7 @@ SHIM
 cmd_install_file() {
     need_root
     [[ $# -eq 1 && -f "${1:-}" ]] || die "uso interno: $PROG __install-file <paquete.pkg.tar.zst>"
-    data_lock # Q4-H1: fase privilegiada del flujo AUR (corre como root)
+    data_lock # fase privilegiada del flujo AUR (corre como root)
     ensure_image
     local file="$1"
     [[ "$file" == "$ARXY_BUILD"/* ]] && file="$NS_BUILD${file#$ARXY_BUILD}"
@@ -449,16 +449,16 @@ cmd_install_file() {
 
 cmd_remove() {
     [[ $# -ge 1 ]] || die "uso: $PROG remove <paquete...>"
-    # Q6-H9/H11: validar antes de root/red (igual que install).
+    # validar antes de root/red (igual que install).
     local _r
     for _r in "$@"; do
         [[ "$_r" == -* ]] && die "opcion no soportada en remove: '$_r'"
         check_pkg_name "$_r"
     done
     need_root
-    data_lock # Q4-H1
+    data_lock # 
     ensure_image
-    # Igual que install (P6-H2): sin flags a pacman privilegiado.
+    # Igual que install (): sin flags a pacman privilegiado.
     local -a nc
     nc_args nc
     pacman_mut -Rns "${nc[@]}" "$@" || die "fallo 'pacman -Rns' de '$*' en '$ARXY_ROOT' (mira el error de pacman arriba)"
@@ -474,7 +474,7 @@ cmd_remove() {
 
 cmd_update() {
     need_root
-    data_lock # Q4-H1
+    data_lock # 
     ensure_image
     local -a nc
     nc_args nc
@@ -495,7 +495,7 @@ cmd_clean() { # [--apply]
     [[ "${1:-}" == "--apply" ]] && apply=1
     [[ -z "${1:-}" || -n "$apply" ]] || die "uso: $PROG clean [--apply]"
     [[ -z "${2:-}" ]] || die "uso: $PROG clean [--apply]"
-    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply borra .old (dry-run libre)
+    [[ -n "$apply" ]] && data_lock # el apply borra .old (dry-run libre)
     local r p a d o f
     r="$(du -sh "$ARXY_ROOT" 2>/dev/null | cut -f1)"
     p="$(du -sh "$ARXY_ROOT/var/cache/pacman/pkg" 2>/dev/null | cut -f1)"
@@ -532,7 +532,7 @@ cmd_clean() { # [--apply]
 # rompe solo y cada app vuelve a ser independiente. Es correcto.
 # Si una app modificara un fichero linkeado afectaria a las demas; en /usr
 # no ocurre en la practica (ver README).
-# ponytail: nombres con \n quiebran el parseo (asumimos que /usr no los tiene); upgrade: find -print0 + cksum --zero.
+# TODO: nombres con \n quiebran el parseo (asumimos que /usr no los tiene); upgrade: find -print0 + cksum --zero.
 do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     local auto="${1:-}"
     local start=$SECONDS saved=0 linked=0
@@ -574,7 +574,7 @@ do_dedup() { # [auto] : auto solo informa si ahorra >=10MB
     fi
     if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi
     if [[ -n "$_trap_exit" ]]; then eval "$_trap_exit"; else trap - EXIT; fi
-    rm -rf "${work:?}" # limpieza explicita: el trap ya cumplio y se restauro el del llamador (A2)
+    rm -rf "${work:?}" # limpieza explicita: el trap ya cumplio y se restauro el del llamador
     return 0 # hook best-effort: un dedup silencioso jamas debe fallar un install/update
 }
 

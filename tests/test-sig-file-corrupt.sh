@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-sig-file-corrupt.sh — .arxy-sig corrupto (P4-H5 segunda pasada,
-# MEDIA): "", "2" o basura deben leerse como no-verificado (false), con
-# rc 0 y stderr limpio; "1" sigue dando true. Via binario con root
+# test-sig-file-corrupt.sh — .arxy-sig corrupto: "", "2" o basura deben leerse
+# como no-verificado (false), con rc 0 y stderr limpio; "1" sigue dando true. Via binario con root
 # valido en /tmp (sin root real ni red).
 set -uo pipefail
 FAIL=0

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-input-e2e.sh — input visible en el sandbox (Commit 18). Sin root+
+# test-input-e2e.sh — input visible en el sandbox. Sin root+
 # imagen: SKIP. Rootfs sin evtest: se instala (--needed, diminuto).
 set -uo pipefail
 FAIL=0

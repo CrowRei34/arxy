@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-shims-negative.sh — el detector de shims caza (P4-H9 segunda
-# pasada, MEDIA): prueba que el grep de test-desktop-shims.sh no es
-# tautologico. Fixture con `gio` literal debe matchear; el repo real no.
+# test-shims-negative.sh — el detector de shims caza: prueba que el grep de
+# test-desktop-shims.sh no es tautologico. Fixture con `gio` literal debe matchear; el repo real no.
 set -uo pipefail
 FAIL=0
 HERE="$(dirname "$0")"

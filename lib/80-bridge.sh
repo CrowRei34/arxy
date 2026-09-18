@@ -1,4 +1,4 @@
-# --- host-bridge: daemon arxy-bridged (Fase 5; binario endurecido Commit 14)
+# --- host-bridge: daemon arxy-bridged
 # Sin socket no hay nada: run_in solo monta si existe (degradacion limpia).
 # Sin auto-arranque salvo que el binario exista y ARXY_NO_BRIDGE no este.
 # Sin allowlist no arranca (default en bash; el C sigue fail-closed).
@@ -54,12 +54,12 @@ bridge_resolve_allowlist() { # nombres -> paths absolutos (avisa y salta)
     done
     return 0
 }
-bridge_token_new() { # 64 hex de /dev/urandom (del daemon, Commit 17 lo refina)
+bridge_token_new() { # 64 hex de /dev/urandom (lo genera el daemon)
     head -c 32 /dev/urandom 2>/dev/null | od -An -tx1 2>/dev/null | tr -d ' \n' || true
 }
-bridge_env_l2() { # Q4-H7: L2 no pasa por run_in (exec ld-linux directo) y
+bridge_env_l2() { # L2 no pasa por run_in (exec ld-linux directo) y
     # las apps perdian el bridge en silencio. Misma resolucion que run_in
-    # (incluido fallback P5-H10) pero con export (el path vale tal cual,
+    # (incluido fallback ) pero con export (el path vale tal cual,
     # sin namespace). Best-effort: sin socket vivo, silencio total.
     [[ -z "${ARXY_NO_BRIDGE:-}" ]] || return 0
     ensure_bridge_daemon || true
@@ -77,7 +77,7 @@ bridge_env_l2() { # Q4-H7: L2 no pasa por run_in (exec ld-linux directo) y
     fi
     return 0
 }
-bridge_session_notice() { # Q4-H6: para doctor --fix --apply (yMsgs): avisa
+bridge_session_notice() { # para doctor --fix --apply (yMsgs): avisa
     # si hay sesion bridge viva, ya que el apply puede rotar el root bajo
     # apps en curso. Solo certeza (socket + pid vivo): sin pidfile no se
     # puede confirmar y se calla. Nunca falla (rc 0 siempre).
@@ -132,7 +132,7 @@ cmd_host_bridge() { # [--daemon|--stop|--status] [--socket P] [--allowed-cmd B..
         --stop)
             if bridge_pid_alive "$pidf"; then
                 # TERM puede tardar (drena colas); esperar evita borrar el
-                # pidfile con vivo dentro (M7: el --daemon siguiente
+                # pidfile con vivo dentro (el --daemon siguiente
                 # duplicaba instancia). Sin muerte: KILL; si ni asi,
                 # no mentir "detenido".
                 kill "$(cat "$pidf")" 2>/dev/null || true

@@ -29,7 +29,7 @@ t "sin cards calla" "-" "no discreta"
 # doctor_gpu se prueba tras sourcear lib (necesita overrides image_ok/is_mesa_mini; ver abajo).
 # Ojo pipefail: se captura la salida (|| true) y decide el grep, no el rc.
 
-# --- Commit 9: heuristica NVIDIA pura, con mocks (sin root ni GPU real) ---
+# --- heuristica NVIDIA pura, con mocks (sin root ni GPU real) ---
 HERE="$(dirname "$0")"
 # shellcheck source=../lib/00-head.sh
 . "$HERE/../lib/00-head.sh" >/dev/null 2>&1
@@ -169,7 +169,7 @@ dline="$(grep -n -- '--dir' "$REC" | head -1 | cut -d: -f1)"; bline="$(grep -n "
 grep -q "FDCONTENT /usr/share/vulkan/icd.d/nvidia_icd.json" "$REC" && echo "PASS: run_in icd ro-bind-data" || { echo "FAIL: run_in icd ro-bind-data"; FAIL=$((FAIL+1)); }
 grep -q '"/usr/lib/arxy-nvidia/lib64/libGLX_nvidia.so.0"' "$REC" && echo "PASS: run_in icd reescrito en FD" || { echo "FAIL: run_in icd contenido FD"; FAIL=$((FAIL+1)); }
 grep -q '"/usr/lib/libGLX_nvidia.so.0"' "$REC" && { echo "FAIL: run_in icd path viejo en FD"; FAIL=$((FAIL+1)); } || echo "PASS: run_in icd sin path viejo"
-# Q1-H2: un ICD 32-bit no debe reescribirse a lib64 (rompia el loader 32
+# un ICD 32-bit no debe reescribirse a lib64 (rompia el loader 32
 # en silencio). file stubbed a 32-bit => determinista sin ELF real.
 echo "== run_in ICD 32-bit reescribe a lib32"
 V32="$D/icd32"; mkdir -p "$V32/vk"
@@ -195,7 +195,7 @@ mkdir -p "$D/drmA/card0/device" "$D/drmN/card0/device"
 printf '0x1002' > "$D/drmA/card0/device/vendor"
 printf '0x10de' > "$D/drmN/card0/device/vendor"
 g "stack amd" "vulkan-radeon lib32-vulkan-radeon" "$(ARXY_SYS_DRM_PATH="$D/drmA" gpu_stack_pkgs | xargs)"
-# Q4-H5: NVIDIA pinneado al modulo del host (antes sin pin: mismatch silencioso).
+# NVIDIA pinneado al modulo del host (antes sin pin: mismatch silencioso).
 mkdir -p "$D/nvroot/proc/driver/nvidia"
 printf 'NVRM version: NVIDIA UNIX x86_64 Kernel Module  550.54.14\n' > "$D/nvroot/proc/driver/nvidia/version"
 g "stack nvidia pinneado" "nvidia-utils=550.54.14 lib32-nvidia-utils=550.54.14" "$(ARXY_SYS_DRM_PATH="$D/drmN" ARXY_SYS_ROOT="$D/nvroot" gpu_stack_pkgs | xargs)"

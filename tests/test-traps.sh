@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-traps.sh — A2: do_dedup y probe_overlayfs desarman sus traps.
+# test-traps.sh — do_dedup y probe_overlayfs desarman sus traps.
 # Un trap RETURN/EXIT huerfano disparaba en cada retorno posterior de
 # otra funcion: rc falso o "unbound variable" con set -u ($t local ya
 # no existe). ARXY_ROOT aislado en /tmp; sin root, sin imagen.

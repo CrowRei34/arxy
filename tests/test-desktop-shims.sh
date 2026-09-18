@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-desktop-shims.sh — sin shims en el rootfs por diseño (Fase 6a):
+# test-desktop-shims.sh — sin shims en el rootfs por diseño:
 # las apps llegan al host vía ARXY_BRIDGE_SOCKET/TOKEN + allowlist del
 # daemon (e2e T0/T16/T19); xdg-open cubre gio. Sin root ni imagen: grep
 # al repo (contrato, no comportamiento).
@@ -34,7 +34,7 @@ else
 fi
 grep -q 'ARXY_BRIDGE_SOCKET' "$REPO/lib/10-level.sh" && ok "run_in expone SOCKET" || no "run_in expone SOCKET"
 grep -q 'ARXY_BRIDGE_TOKEN' "$REPO/lib/10-level.sh" && ok "run_in expone TOKEN" || no "run_in expone TOKEN"
-# Q4-H6: aviso con sesion viva (pid con cmdline arxy-bridged via exec -a).
+# aviso con sesion viva (pid con cmdline arxy-bridged via exec -a).
 if command -v python3 >/dev/null 2>&1; then
     _bn="$(mktemp -d)"
     python3 -c "import socket; s=socket.socket(socket.AF_UNIX); s.bind('$_bn/arxy-bridge.sock')" 2>/dev/null

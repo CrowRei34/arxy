@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-bridge-in-container.sh — e2e bridge dentro del rootfs (Commit 15).
+# test-bridge-in-container.sh — e2e bridge dentro del rootfs.
 # Lento y con root+imagen: SKIP sin eso. XDG_RUNTIME_DIR aislado a TMP
 # (daemon y run_in acuerdan el socket ahi). Requiere `make bridge`.
 set -uo pipefail

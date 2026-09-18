@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-setup-enospc.sh — disco lleno durante setup (P4-H3 segunda pasada,
-# ALTA): el fallo real mas probable (~1GB) sin red de regresion. tar/zstd
-# stubbed con ENOSPC: cmd_setup debe morir limpio, el root viejo seguir
+# test-setup-enospc.sh — disco lleno durante setup: el fallo real mas probable (~1GB).
+# tar/zstd stubbed con ENOSPC: cmd_setup debe morir limpio, el root viejo seguir
 # intacto y operativo, y no quedar huerfanos. Sin root ni red: todo en /tmp.
 set -uo pipefail
 FAIL=0

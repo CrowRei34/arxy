@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-signature-policy.sh — ARXY_SIGNATURE_POLICY (Fase 7): parseo desde
+# test-signature-policy.sh — ARXY_SIGNATURE_POLICY: parseo desde
 # conf, precedencia env > user-conf > sys-conf, valor invalido = die,
 # ausente = optional. Sin root ni red (confs fixture, source en subshell).
 set -uo pipefail
@@ -42,14 +42,14 @@ v="$( ( export ARXY_SIGNATURE_POLICY=off XDG_CONFIG_HOME="$D/xdg-user"; src ) )"
 err="$( ( export ARXY_SIGNATURE_POLICY=bogus; enforce_signature_policy 0 ) 2>&1 >/dev/null || true)"
 grep -q 'required|optional|off' <<<"$err" && ok "T2: mensaje lista valores" || no "T2: mensaje lista valores" "[$err]"
 
-echo "== T3: todo aviso: va a stderr (P5-H4; tripwire)"
+echo "== T3: todo aviso: va a stderr (; tripwire)"
 if grep -rn 'msg "aviso:' "$HERE/../lib" | grep -v '>&2' | grep -q .; then
     no "T3 avisos a stderr" "$(grep -rn 'msg "aviso:' "$HERE/../lib" | grep -v '>&2' | head -n 3 | tr '\n' ' ')"
 else
     ok "T3 avisos a stderr"
 fi
 
-echo "== T4: todo error: va a stderr (P5-H5; tripwire)"
+echo "== T4: todo error: va a stderr (; tripwire)"
 if grep -rn 'msg "error:' "$HERE/../lib" | grep -v '>&2' | grep -q .; then
     no "T4 errores a stderr" "$(grep -rn 'msg "error:' "$HERE/../lib" | grep -v '>&2' | head -n 3 | tr '\n' ' ')"
 else

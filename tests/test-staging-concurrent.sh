@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-staging-concurrent.sh — dos staging validos (P4-H7 segunda pasada,
-# MEDIA): empate de mtime no debe publicar dos raices ni dejar restos;
-# el inventario elige uno determinista. Sin root ni imagen: todo en /tmp.
+# test-staging-concurrent.sh — dos staging validos: empate de mtime no debe
+# publicar dos raices ni dejar restos; el inventario elige uno determinista. Sin root ni imagen: todo en /tmp.
 set -uo pipefail
 FAIL=0
 HERE="$(dirname "$0")"

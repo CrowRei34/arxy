@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-env-pass-sudo.sh — sudo real preserva ARXY_* (M13 backlog, MEDIA):
+# test-env-pass-sudo.sh — sudo real preserva ARXY_*:
 # los stubs prueban el argv construido, no que el sudo real (env_reset,
 # secure_path) lo deje pasar. Con sudo NOPASSWD: VAR= explicitos viajan;
 # sin el: SKIP honesto (lo cubren los stubs de test-env-pass.sh).
@@ -23,7 +23,7 @@ if ! command -v sudo >/dev/null 2>&1 || ! sudo -n true >/dev/null 2>&1; then
 else
     echo "== T2: sudo real deja pasar VAR= explicitos"
     mapfile -t _pass < <(arxy_env_pass)
-    # Q2-H3: capturar y grepear despues (regla 5); el pipe directo a
+    # capturar y grepear despues (regla 5); el pipe directo a
     # grep -q bajo pipefail daba SIGPIPE 141 intermitente (flake).
     if out="$(sudo -n "${_pass[@]}" -- env 2>/dev/null)" && grep -qx 'ARXY_E2E_PROBE=hola-sudo' <<<"$out"; then ok "T2 viaja";
     else no "T2 viaja"; fi

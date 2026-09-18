@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-env-pass-negative.sh — sin elevador no se eleva (P4-H9 segunda
-# pasada, MEDIA): sin sudo ni doas, as_root debe fallar (no operar
-# sobre el rootfs por defecto en silencio). PATH minimo sin elevador.
+# test-env-pass-negative.sh — sin elevador no se eleva: sin sudo ni doas,
+# as_root debe fallar (no operar sobre el rootfs por defecto en silencio). PATH minimo sin elevador.
 set -uo pipefail
 FAIL=0
 HERE="$(dirname "$0")"

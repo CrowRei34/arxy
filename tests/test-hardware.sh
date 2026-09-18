@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-hardware.sh — Fase 5: GPU/dbus/export/app en hardware real (Intel HD 630).
+# test-hardware.sh — GPU/dbus/export/app en hardware real (Intel HD 630).
 # Uso: ./tests/test-hardware.sh  (arxy en PATH; corre en el HOST, no en container)
 # Reporta PASS/SKIP/FAIL con evidencia. Lo que no hay (AMD/NVIDIA) se SKIPea,
 # no se finge: ver tabla "probado en hardware" del README.

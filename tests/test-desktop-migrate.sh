@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-desktop-migrate.sh — `arxy desktop --migrate` etiqueta .desktop legacy
-# sin X-Arxy-Pkg (Fase 6a, Commit 20). Sin root ni imagen: XDG_DATA_HOME
+# sin X-Arxy-Pkg. Sin root ni imagen: XDG_DATA_HOME
 # aislado, funciones en directo + una pasada por el CLI (migrate no exige
 # imagen). Idempotente: la 2a corrida es no-op.
 set -uo pipefail

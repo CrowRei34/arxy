@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-signature.sh — firma minisign del tarball (Fase 7). Sin root, imagen
+# test-signature.sh — firma minisign del tarball. Sin root, imagen
 # ni red: minisign fakeado por funcion (rc controlado) + ficheros fixture.
 # Roundtrip real solo si hay minisign (si no: SKIP). La privada de test se
 # genera en runtime y jamas se commitea.
@@ -123,7 +123,7 @@ if command -v minisign >/dev/null 2>&1; then
     cp "$V/msg.minisig" "$D/v-sig-tocada.minisig" && sed -i '2s/./X/' "$D/v-sig-tocada.minisig"
     ( verify_signature "$V/msg.bin" "$D/v-sig-tocada.minisig" "$V/t.pub" ); rc=$?
     [[ "$rc" == 1 ]] && ok "vector: firma tocada falla" || no "vector: firma tocada falla" "$rc"
-    # Q2-H11: minisign ignora basura trailing por diseno (A5); pinnearlo
+    # minisign ignora basura trailing por diseno; pinnearlo
     # para que nadie lo "endurezca" rompiendo compat, y cruzar args para
     # cazar delegacion con pub/sig trocados (falla con rc!=0 igual).
     cp "$V/msg.minisig" "$D/v-sig-basura.minisig" && printf 'basura-trailing\n' >>"$D/v-sig-basura.minisig"

@@ -30,7 +30,7 @@ Dia a dia:
   unexport <nombre>    borrar un lanzador
   desktop --migrate    migrar lanzadores legacy sin X-Arxy-Pkg (idempotente)
   host-bridge [--daemon|--stop|--status] [--socket P] [--allowed-cmd BIN...]
-                       daemon host-bridge (Fase 5; sin allowlist no arranca)
+                       daemon host-bridge (sin allowlist no arranca)
 
 Reparar y mantener:
   rollback             restaura el setup inmediato anterior (1 sola generacion)

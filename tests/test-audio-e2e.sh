@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-audio-e2e.sh — audio visible en el sandbox (Commit 18). Silencioso:
+# test-audio-e2e.sh — audio visible en el sandbox. Silencioso:
 # solo lista e inspecciona, nunca emite sonido. Sin root+imagen: SKIP.
 # Rootfs sin alsa-utils: se instala (--needed, rapido) en root aislado.
 set -uo pipefail

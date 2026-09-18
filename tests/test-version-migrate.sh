@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-version-migrate.sh — plano legacy -> JSON sin perder datos (Commit 5).
+# test-version-migrate.sh — plano legacy -> JSON sin perder datos.
 # Idempotente, no toca basura, no exige nada si falta. Sin root ni imagen.
 # Llamadas DIRECTAS (ver test-version-format.sh: sh -c esconde funciones).
 set -uo pipefail

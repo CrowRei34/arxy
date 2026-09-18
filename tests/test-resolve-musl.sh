@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-resolve-musl.sh — puerta musl y resolucion (P4-H8 segunda pasada,
-# MEDIA): binario inexistente muere claro, ruta inexistente asume
-# subsistema, ELF musl del host muere antes de bwrap, which distingue
+# test-resolve-musl.sh — puerta musl y resolucion: binario inexistente muere claro,
+# ruta inexistente asume subsistema, ELF musl del host muere antes de bwrap, which distingue
 # origen. Sin root ni imagen: todo en /tmp, file stubbed.
 set -uo pipefail
 FAIL=0

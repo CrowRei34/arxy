@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-staging-replace.sh — rama replace-root (P4-H2 segunda pasada, ALTA):
+# test-staging-replace.sh — rama replace-root:
 # R existente pero invalido (_image_ok falso) + staging valido. Sin esta
 # red, un root corrupto con staging bueno podria no reemplazarse. Sin root
 # ni imagen: todo en /tmp.

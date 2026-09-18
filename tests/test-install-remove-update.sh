@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # test-install-remove-update.sh — red unitaria para cmd_install/cmd_remove/
-# cmd_update/cmd_install_aur (P4-H1 segunda pasada: mutaciones del rootfs
+# cmd_update/cmd_install_aur (mutaciones del rootfs
 # sin test directo; solo stubs). Sin root ni red: pacman/export/migrate
 # stubbed, rootfs y XDG aislados en /tmp.
 set -uo pipefail
@@ -71,33 +71,33 @@ echo "== T8: install sin args muere con uso"
 out="$(cmd_install 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "uso:" <<<"$out" && ok "T8 uso" || no "T8 uso (rc=$rc)"
 
-echo "== T9: gpu-stack sin pacman.conf avisa, no silencia (P5-H3)"
+echo "== T9: gpu-stack sin pacman.conf avisa, no silencia ()"
 out="$( eval "$_REAL_GPUSTACK"; ARXY_ROOT="$D/sinroot" cmd_gpu_stack gpu-amd 2>&1 )"; rc=$?
 [[ $rc -eq 0 ]] && grep -q "omito gpu-stack" <<<"$out" && ok "T9 aviso" || no "T9 aviso (rc=$rc $out)"
 
-echo "== T10: export fallido avisa y no tumba el install (P5-H3)"
+echo "== T10: export fallido avisa y no tumba el install ()"
 out="$( cmd_export() { return 1; }; cmd_install foo 2>&1 )"; rc=$?
 [[ $rc -eq 0 ]] && grep -q "no pude exportar foo" <<<"$out" && grep -q "PACMAN_MUT.*foo" <<<"$out" && ok "T10 aviso+sigue" || no "T10 aviso+sigue (rc=$rc $out)"
 
-echo "== T11: check_pkg_name rechaza guion inicial (P6-H3)"
+echo "== T11: check_pkg_name rechaza guion inicial ()"
 bad=0
 for p in "-flag" "--" "--root=/x"; do (check_pkg_name "$p" >/dev/null 2>&1) && bad=$((bad+1)); done
 [[ $bad -eq 0 ]] && ok "T11 guion inicial" || no "T11 guion inicial ($bad pasaron)"
 check_pkg_name "steam" >/dev/null 2>&1 && check_pkg_name "a+b.c_d@e" >/dev/null 2>&1 && ok "T11 validos siguen" || no "T11 validos siguen"
 
-echo "== T12: install con opcion muere antes de pacman (P6-H2)"
+echo "== T12: install con opcion muere antes de pacman ()"
 out="$(cmd_install --root=/evil 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "opcion no soportada" <<<"$out" && ! grep -q "PACMAN_MUT" <<<"$out" && ok "T12 inyeccion" || no "T12 inyeccion (rc=$rc $out)"
 
-echo "== T13: --dry-run sin gaming muere claro (P6-H4)"
+echo "== T13: --dry-run sin gaming muere claro ()"
 out="$(cmd_install --dry-run foo 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "solo vale con arxy-gaming" <<<"$out" && ! grep -q "PACMAN_MUT" <<<"$out" && ok "T13 dry-run" || no "T13 dry-run (rc=$rc $out)"
 
-echo "== T14: remove con opcion muere antes de pacman (P6-H2)"
+echo "== T14: remove con opcion muere antes de pacman ()"
 out="$(cmd_remove --config=/evil 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "opcion no soportada" <<<"$out" && ! grep -q "PACMAN_MUT" <<<"$out" && ok "T14 remove" || no "T14 remove (rc=$rc $out)"
 
-echo "== T15: AUR con flag intermedio muere, no lo salta (P6-H3)"
+echo "== T15: AUR con flag intermedio muere, no lo salta ()"
 out="$( eval "$_REAL_AUR"; ensure_aur_env() { return 0; }; _ARXY_LEVEL=1; cmd_install_aur foo -bar 2>&1 )"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "opcion no soportada en AUR" <<<"$out" && ok "T15 AUR flag" || no "T15 AUR flag (rc=$rc $out)"
 

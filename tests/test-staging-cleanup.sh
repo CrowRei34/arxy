@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-staging-cleanup.sh — fix staging-cleanup (Commit 7): detecta huerfanos
+# test-staging-cleanup.sh — fix staging-cleanup: detecta huerfanos
 # de setup/rollback (root.new.*, .image.partial.*, root.old.tmp.*, .swap.*)
 # con la MISMA staging_inventory que aplica recover_staging, y --apply los
 # resuelve. Probe sin root ni imagen; el --apply via doctor exige root (SKIP
@@ -118,7 +118,7 @@ unset -f mv
 [[ $rc -eq 0 ]] && grep -q "aviso: no pude recuperar $R.new.222" <<<"$out" && ok "T10 aviso + rc 0" || no "T10 aviso + rc 0"
 clean
 
-echo "== T11: hold-mesa sin [options] falla honesto, no [hecho] falso (Q6-H4)"
+echo "== T11: hold-mesa sin [options] falla honesto, no [hecho] falso ()"
 clean; mkroot "$R" bueno
 printf '# sin estanza options\n' > "$R/etc/pacman.conf"
 id() { echo 0; }
@@ -133,7 +133,7 @@ unset -f id need_root is_mesa_mini cmd_install
 grep -q "\[hecho\] hold-mesa aplicado" <<<"$out" && grep -q '^IgnorePkg.*mesa' "$R/etc/pacman.conf" && ok "T11 control aplica" || no "T11 control ($out)"
 clean
 
-echo "== T12: ciclo de vida no toca paths del bridge (Q4-H2/H4)"
+echo "== T12: ciclo de vida no toca paths del bridge ()"
 # Contrato: setup/rollback/gc viven bajo ARXY_ROOT/ARXY_DATA; el daemon
 # (socket/pid/token) vive fuera. Si alguien referencia el bridge desde
 # el ciclo de vida, este pin cae (en codigo, no en comentario).

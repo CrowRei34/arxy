@@ -127,7 +127,7 @@ grep -q '"image": "file:///gen-vieja"' "$R/var/lib/arxy/version" 2>/dev/null && 
 ls -d "$R".old.tmp.* >/dev/null 2>&1 && no "T4 tmp resuelto" || ok "T4 tmp resuelto"
 grep -q "recuperado" <<<"$rec" && ok "T4 recovery loguea" || no "T4 recovery loguea"
 
-echo "== T5: root valido sin version (pre-Commit 6) se regenera"
+echo "== T5: root valido sin version (formato anterior) se regenera"
 rm -rf "$D/root" "$D/root.old" "$D"/root.new.* "$D"/root.old.tmp.* "$D/version"
 mkroot "$R"; echo vetusto > "$R/.mark"
 printf 'url=file:///legado.tar.zst\ndate=2019-01-01T00:00:00Z\n' > "$D/version"
@@ -151,7 +151,7 @@ ensure_image >/dev/null 2>&1
 ls -d "$R".old.tmp.* >/dev/null 2>&1 && no "T6 tmp resuelto" || ok "T6 tmp resuelto"
 [[ ! -e "$D/version" ]] && ok "T6 sin legacy fuera" || no "T6 sin legacy fuera"
 
-echo "== T7: rollback invalida .arxy-sig rancia (Q4-H3)"
+echo "== T7: rollback invalida .arxy-sig rancia ()"
 rm -rf "$D/root" "$D/root.old" "$D"/root.new.* "$D"/root.old.tmp.* "$D"/.image.partial.* "$D/version"
 mkroot "$R"; echo nuevo > "$R/.mark"
 mkroot "$R.old"; echo viejo > "$R.old/.mark"

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-gc.sh — cmd_gc (Commit 8): --json format 1 + --apply con prompt tty.
+# test-gc.sh — cmd_gc: --json format 1 + --apply con prompt tty.
 # root.old VALIDO exige tty (o --yes); CORRUPTO se purga sin preguntar.
 # staging via recover_staging. Sin root ni imagen: need_root stubbed, todo
 # en /tmp; sin tty via </dev/null (determinista).
@@ -101,7 +101,7 @@ grep -qE '"applied_bytes": [0-9]+' <<<"$out" && ok "T7 applied_bytes numero" || 
 [[ ! -d "$R.old" ]] && ok "T7 purga hecha" || no "T7 purga hecha"
 clean
 
-echo "== T8: lock tomado -> apply muere claro sin tocar (Q4-H1)"
+echo "== T8: lock tomado -> apply muere claro sin tocar ()"
 clean; mkroot "$R"; mkroot "$R.old"; echo x > "$R.old/usr/bin/bash"
 # Los T0-T7 directos dejaron ARXY_LOCK_FD tomado en esta shell (reentrancia):
 # soltarlo para que solo el lock-padre de abajo bloquee.

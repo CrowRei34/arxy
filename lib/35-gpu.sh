@@ -1,9 +1,9 @@
-# --- GPU real (Fase 4): heuristica NVIDIA en bash, deteccion pura.
+# --- GPU real: heuristica NVIDIA en bash, deteccion pura.
 # El montaje vive en run_in (lib/10-level.sh: solo run/shell; pacman via
 # in_bwrap no toca GPU). Salidas componibles: una entrada por linea. Mocks en AGENTS.md (todos probativos: sin mock y sin
 # NVIDIA, vacio sin fallar). file(1) ya es dependencia declarada del paquete.
 # NOTA: el driver Xorg (xorg/modules) no se escanea (sin mock propio); su
-# MAPEO si esta en nvidia_guest_path (Commit 10 lo instala por ruta conocida).
+# MAPEO si esta en nvidia_guest_path (se instala por ruta conocida).
 
 elf_class() { # <fichero> : 64|32|"" (vacio = no ELF o file ausente)
     local f="$1" cls=""
@@ -84,7 +84,7 @@ nvidia_icd_rewrite() { # <host_icd> <guest_lib> : JSON con library_path reescrit
     printf '%s\n' "${content//"$lp"/"$glib"}"
     return 0
 }
-# ponytail: rewrite solo 64-bit (el loader de 32-bit necesitaria su propio
+# TODO: rewrite solo 64-bit (el loader de 32-bit necesitaria su propio
 # manifiesto); segundo manifiesto cuando alguien corra Vulkan 32-bit aqui.
 
 nvidia_guest_path() { # <host_path> <class> : path en rootfs ("" = inclasificable)
@@ -124,7 +124,7 @@ gpu_stack_pkgs() { # un paquete por linea: ICD Vulkan glibc del rootfs
     # GL/DRI ya lo trae mesa-mini (iris/radeonsi/nouveau presentes);
     # falta el ICD Vulkan del vendor (+lib32; pacman cierra dependencias).
     # Sin discreta se asume Intel (la iGPU no reporta vendor a drm).
-    # Q4-H5: NVIDIA pinneado al modulo del host (como arxy_gaming_pkgs);
+    # NVIDIA pinneado al modulo del host (como arxy_gaming_pkgs);
     # sin version legible se muere claro (un utils sin pin rompe el GL).
     local ver=""
     case "$(detect_gpu || true)" in

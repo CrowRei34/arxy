@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-bridge-kill.sh — daemon asesinado (P4-H6 segunda pasada, MEDIA):
+# test-bridge-kill.sh — daemon asesinado:
 # kill -9 al daemon deja pidfile+socket huerfanos; --status debe decir
 # inactivo (no mentir) y el siguiente --daemon levantar sin "ya corre".
 # Daemon y socket en TMP (el daemon real del usuario no se toca).

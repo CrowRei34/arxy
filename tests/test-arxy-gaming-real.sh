@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-arxy-gaming-real.sh — install arxy-gaming de verdad (Commit 13).
+# test-arxy-gaming-real.sh — install arxy-gaming de verdad.
 # Lento (~1GB + build AUR) y con root: SOLO con ARXY_GAMING_REAL=1,
 # ARXY_ROOT aislado (jamas el de produccion) y uid 0. Sin eso: SKIP.
 # Fuera de la puerta rapida; para CI semanal o verificacion manual.

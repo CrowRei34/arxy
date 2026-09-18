@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# test-doctor-fix-apply.sh — --apply con root en rootfs aislado (Commit 4).
+# test-doctor-fix-apply.sh — --apply con root en rootfs aislado.
 # Un setup real en /tmp: hold-mesa se rompe a mano, --apply lo restaura;
-# db.lck stale sobrevive sin --confirm; nvidia-align no instala (Fase 4).
+# db.lck stale sobrevive sin --confirm; nvidia-align no instala.
 # Requiere: root, red, ~1GB en /tmp. NUNCA toca /var/lib/arxy (guarda).
 # La ruta del repo padre tiene espacios: el fixture se copia a /tmp.
 #
@@ -40,7 +40,7 @@ t "apply informa rc 0 + contenido" -- sh -c '"$0" doctor --fix 2>/dev/null | gre
 touch "$R/var/lib/pacman/db.lck"
 t "stale lock sobrevive sin --confirm" -- sh -c '"$0" doctor --fix --apply >/dev/null 2>&1; test -f "$1/var/lib/pacman/db.lck"' "$BIN" "$R"
 rm -f "$R/var/lib/pacman/db.lck"
-t "nvidia-align no instala (Fase 4)" -- sh -c '! "$0" list 2>/dev/null | grep -q "^nvidia-utils "' "$BIN"
+t "nvidia-align no instala" -- sh -c '! "$0" list 2>/dev/null | grep -q "^nvidia-utils "' "$BIN"
 
 echo "== resultado: $([[ $FAIL -eq 0 ]] && echo TODO_OK || echo "$FAIL FALLOS")"
 exit $FAIL

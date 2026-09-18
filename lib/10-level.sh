@@ -78,7 +78,7 @@ run_in() {
     if [[ -n "$_nvm$_nvi" ]]; then
         # --dir antes que los binds (bwrap procesa en orden; el / ya viene
         # bindeado primero desde bwrap_base). Solo lib64/lib32: el driver
-        # Xorg (xorg/modules) no se monta (ponytail: DDX anidada, montar
+        # Xorg (xorg/modules) no se monta (TODO: DDX anidada, montar
         # cuando alguien corra un X dentro).
         b+=(--dir /usr/lib/arxy-nvidia/lib64 --dir /usr/lib/arxy-nvidia/lib32)
         local _h _g
@@ -92,7 +92,7 @@ run_in() {
             case "$_k" in
                 vulkan) _d=/usr/share/vulkan/icd.d ;;
                 egl) _d=/usr/share/egl/egl_external_platform.d ;;
-                # ponytail: glvnd egl_vendor.d sin montar (OUT-OF-SCOPE §6); upgrade con --ro-bind-data como los ICDs.
+                # TODO: glvnd egl_vendor.d sin montar (OUT-OF-SCOPE §6); upgrade con --ro-bind-data como los ICDs.
                 *) continue ;;
             esac
             # El FD debe abrirse en ESTE shell (en un $() moriria con el
@@ -103,7 +103,7 @@ run_in() {
             # Sin library_path se monta tal cual (nada que redirigir).
             _lp="$(nvidia_icd_library "$_ip")"
             if [[ -n "$_lp" ]]; then
-                # Q1-H2: no asumir 64-bit (un ICD 32-bit reescrito a lib64
+                # no asumir 64-bit (un ICD 32-bit reescrito a lib64
                 # rompe el loader 32 en silencio). elf_class decide; si es
                 # inclasificable (SONAME pelado), 64 como antes.
                 _cls="64"
@@ -117,19 +117,19 @@ run_in() {
             b+=(--ro-bind-data "$_nfd" "$_d/$(basename "$_ip")")
         done <<<"$_nvi"
     fi
-    # Bridge (Fase 5): auto-arranque best-effort (nunca rompe run) y
+    # Bridge: auto-arranque best-effort (nunca rompe run) y
     # ARXY_BRIDGE_SOCKET + TOKEN apuntando dentro (nunca al path del host).
     # Sin socket: ni bind ni env (cero regresion).
     # El socket vive bajo /run o /tmp (compartidos con el host): ya es
     # visible dentro en la MISMA ruta, sin bind. Bindear a un path fijo
     # bajo /run falla como usuario (EPERM en /run ajeno) y rompia TODO
-    # 'run' con el daemon vivo (Commit 18, verificado en Void musl: hasta
+    # 'run' con el daemon vivo (verificado en Void musl: hasta
     # 'run id -u' caia). Solo se bindea si el socket vive fuera de lo
     # compartido (XDG raro), a /tmp (sticky: creable por cualquiera).
     ensure_bridge_daemon || true
     local _bsock=""
     _bsock="$(bridge_sock_path)"
-    # Fallback con LA MISMA expansion que bridge_sock_path (P5-H10: ${UID}
+    # Fallback con LA MISMA expansion que bridge_sock_path (${UID}
     # divergia sintacticamente del $(id -u) canonico).
     [[ -S "$_bsock" ]] || _bsock="/tmp/arxy-bridge-$(id -u).sock"
     if [[ -S "$_bsock" && -z "${ARXY_NO_BRIDGE:-}" ]]; then
@@ -246,7 +246,7 @@ in_chroot() {
             resolv_bak="$ARXY_ROOT/etc/resolv.conf.arxy-bak"
             cp -a "$ARXY_ROOT/etc/resolv.conf" "$resolv_bak" 2>/dev/null || true
             # Sin aviso el chroot queda sin DNS y pacman falla con error de
-            # red confuso (M5: la causa raiz quedaba oculta).
+            # red confuso (la causa raiz quedaba oculta).
             cp -L "$real_resolv" "$ARXY_ROOT/etc/resolv.conf" 2>/dev/null \
                 || msg "aviso: DNS del host no disponible en chroot (fallo bind+copia de resolv.conf)" >&2
         fi

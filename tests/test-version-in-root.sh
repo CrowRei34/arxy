@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-version-in-root.sh — version vive DENTRO del root (Commit 6).
+# test-version-in-root.sh — version vive DENTRO del root.
 # T0: rollback rota dirs y la version viaja sola (sin copias). T1: pacman no
 # la reclama (root real; SKIP sin imagen nueva). T2: rollback a rootfs viejo
 # (sin version dentro) + ensure regenera. Sin root salvo T1.
@@ -64,7 +64,7 @@ echo "== T2: rollback a rootfs viejo (plano fuera) + ensure regenera"
 export ARXY_IMAGE_URL="file:///nuevo-setup"
 rm -rf "$R" "$R.old" "$D/version"
 mkroot "$R" "file:///nuevo"; echo nuevo > "$R/.mark"
-mkroot "$R.old"; echo viejo > "$R.old/.mark" # pre-Commit 6: sin version dentro
+mkroot "$R.old"; echo viejo > "$R.old/.mark" # formato anterior: sin version dentro
 printf 'url=file:///legado.tar.zst\ndate=2019-01-01T00:00:00Z\n' > "$D/version"
 cmd_rollback >/dev/null 2>&1
 [[ "$(cat "$R/.mark" 2>/dev/null)" == viejo ]] && ok "T2 activo es el viejo" || no "T2 activo es el viejo"

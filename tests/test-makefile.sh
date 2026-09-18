@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-makefile.sh — el build genera src/arxy byte-idéntico (D9) y válido.
+# test-makefile.sh — el build genera src/arxy byte-idéntico y válido.
 # Sin root. Se corre desde la raíz del repo arxy (o tests/).
 set -uo pipefail
 FAIL=0

@@ -83,7 +83,7 @@ cmd_run() {
     resolve_target "$target" # sin $(): el subshell perderia RESOLVED_HOST
     target="$RESOLVED_TARGET"
     if [[ "$_ARXY_LEVEL" == 2 ]]; then
-        bridge_env_l2 # Q4-H7: L2 tambien integra el host (socket+token)
+        bridge_env_l2 # L2 tambien integra el host (socket+token)
         [[ -n "$RESOLVED_HOST" ]] && exec "$target" "$@" # binario del host: nativo
         case "$target" in "$ARXY_ROOT"/*) ;; *) target="$ARXY_ROOT$target" ;; esac
         level2_env
@@ -100,7 +100,7 @@ cmd_run() {
 # host no resuelve caen en command_not_found_handle (ver level2-rc de setup).
 cmd_shell_level2() {
     level2_env
-    bridge_env_l2 # Q4-H7: la shell L2 tambien ve el bridge
+    bridge_env_l2 # la shell L2 tambien ve el bridge
     export PS1="(arxy:2) \\u@\\h \\w\\$ "
     local rcfile="$ARXY_DATA/level2-rc"
     if [[ $# -ge 1 ]]; then

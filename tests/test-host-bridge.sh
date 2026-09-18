@@ -160,7 +160,7 @@ EOF
     fi
 fi
 
-echo "== T21: el resolver no toca el IFS del llamador (P5-H2) =="
+echo "== T21: el resolver no toca el IFS del llamador () =="
 IFS=':'
 bridge_resolve_allowlist <<<"echo" >/dev/null
 [[ "${IFS-}" == ":" ]] && echo "PASS: T21 IFS intacto" || { echo "FAIL: T21 IFS intacto"; FAIL=$((FAIL+1)); }
@@ -168,12 +168,12 @@ unset IFS
 out21="$(printf 'a:b:c\n' | { IFS=,; bridge_resolve_allowlist <<<"echo" >/dev/null; printf '%s' "$IFS"; })"
 [[ "$out21" == "," ]] && echo "PASS: T21 IFS local no fuga" || { echo "FAIL: T21 IFS local no fuga (tengo [$out21])"; FAIL=$((FAIL+1)); }
 
-echo "== T22: una sola grafia de socket fallback (P5-H10; tripwire) =="
+echo "== T22: una sola grafia de socket fallback (; tripwire) =="
 grep -q 'arxy-bridge-$(id -u).sock' "$HERE/../lib/80-bridge.sh" && echo "PASS: T22 canonica en bridge" || { echo "FAIL: T22 canonica en bridge"; FAIL=$((FAIL+1)); }
 if grep -rq 'arxy-bridge-${UID}' "$HERE/../lib" 2>/dev/null; then echo "FAIL: T22 grafia divergente"; FAIL=$((FAIL+1));
 else echo "PASS: T22 sin grafia divergente"; fi
 
-echo "== T23: stop mata al que ignora TERM (M7) =="
+echo "== T23: stop mata al que ignora TERM =="
 cp "$(command -v sleep)" "$D/arxy-bridged"
 ( trap '' TERM; exec -a arxy-bridged "$D/arxy-bridged" 120 ) &
 _kpid=$!

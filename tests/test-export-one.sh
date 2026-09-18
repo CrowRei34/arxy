@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# test-export-one.sh — ramas de export_one/pkg_desktops (P4-H4 segunda
-# pasada, MEDIA): NoDisplay, Name/Exec ausentes, codigos %F, resolucion
-# de binario y recorte de prefijo L2. Sin root ni imagen: rootfs y XDG
+# test-export-one.sh — ramas de export_one/pkg_desktops: NoDisplay, Name/Exec ausentes,
+# codigos %F, resolucion de binario y recorte de prefijo L2. Sin root ni imagen: rootfs y XDG
 # en /tmp, run_pacman stubbed.
 set -uo pipefail
 FAIL=0
@@ -63,13 +62,13 @@ run_pacman() { [[ "${1:-}" == "-Qlq" ]] && printf '%s/usr/share/applications/%s.
 out="$(pkg_desktops alga)"
 [[ "$out" == "/usr/share/applications/alga.desktop" ]] && ok "T6 recorte L2" || no "T6 recorte L2 ($out)"
 
-echo "== T7: cmd_export valida nombre ANTES de ensure_image (Q6-H11)"
+echo "== T7: cmd_export valida nombre ANTES de ensure_image"
 out="$(cmd_export "a b" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T7 nombre con espacio muere claro" || no "T7 nombre con espacio ($rc: $out)"
 out="$(cmd_export "" 2>&1)"; rc=$?
 [[ $rc -ne 0 ]] && grep -q "nombre de paquete invalido" <<<"$out" && ok "T7 vacio muere claro" || no "T7 vacio ($rc: $out)"
 
-echo "== T8: export --all etiqueta deducido, no literal (R1-H4)"
+echo "== T8: export --all etiqueta deducido, no literal ()"
 rm -f "$XDG_DATA_HOME/applications"/arxy-*.desktop
 cmd_export --all >/dev/null 2>&1
 ! grep -rq "^X-Arxy-Pkg=--all$" "$XDG_DATA_HOME/applications/" 2>/dev/null && ok "T8 sin literal --all" || no "T8 sin literal --all"

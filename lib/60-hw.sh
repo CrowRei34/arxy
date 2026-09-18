@@ -21,17 +21,17 @@ is_mesa_mini() { # mini = build externo sin firma conocida
     grep -q '^Packager.*Unknown' <<<"$_qi"
 }
 
-# --- detecciones Fase 2 (contrato doctor --json / hardware.json, format 1) ---
+# --- detecciones (contrato doctor --json / hardware.json, format 1) ---
 # Schema mínimo (tipos): format=int, level=int, libc={kind:glibc|musl|unknown,
 # version:str|null}, kernel={arch,releasestr|null}, userns/overlayfs_rootless/
-# mount_setattr/seccomp/cgroupv2=bool, landlock={available,abi:int|null (null
-# hasta Fase 5: bash no consulta la ABI)}, gpu={vendor:amd|nvidia|intel|unknown,
-# driver:null (Fase 4), render_node:str|null}, nvidia={present,version|null,
+# mount_setattr/seccomp/cgroupv2=bool, landlock={available,abi:int|null (null:
+# bash no consulta la ABI)}, gpu={vendor:amd|nvidia|intel|unknown,
+# driver:null (siempre null), render_node:str|null}, nvidia={present,version|null,
 # usable,reason}, kmods=[...ordenado], dev={dri:[...],nvidia:[...],
 # fuse:str|null}, rootfs={path,present,version:date|null}, fixes_available=[...],
 # fixes_applied=[]. Añadir campos OK; renombrar/quitar no (ver AGENTES.md).
 # fixes_available hoy: [hold-mesa]; futuros: nvidia-align, musl-glibc-stack,
-# gpu-full-stack (Fase 4). staging-cleanup (Commit 7) lista huerfanos de
+# gpu-full-stack. staging-cleanup lista huerfanos de
 # setup/rollback via staging_inventory (la misma que aplica recover_staging).
 FIX_IDS=(hold-mesa nvidia-align musl-glibc-stack gpu-full-stack staging-cleanup)
 # "fixes" es array de objetos {id,applicable,destructive,requires_root,reason,would_do,phase,opt_in?}; phase null = aplicable hoy.
@@ -131,7 +131,7 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
     local nv inst lc dri g _gsp
     case "$1" in
         hold-mesa)
-            # R5-H8: sin rootfs no hay pacman.conf que verificar (antes
+            # sin rootfs no hay pacman.conf que verificar (antes
             # devolvia 'ok' y el JSON lo listaba como disponible).
             if ! image_ok; then
                 echo "skip|sin rootfs verificado||"
@@ -152,14 +152,14 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
                 return 0
             fi
             if ! image_ok; then
-                echo "info|host $nv, sin rootfs verificado|instalar nvidia-utils=<host> en rootfs (Fase 4)|4"
+                echo "info|host $nv, sin rootfs verificado|instalar nvidia-utils=<host> en rootfs|4"
                 return 0
             fi
             inst="$(run_pacman -Qi nvidia-utils 2>/dev/null | grep -m1 '^Version' | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
             if [[ -n "$inst" && "$inst" == "$nv" ]]; then
                 echo "ok|utils $inst alineados con host||"
             else
-                echo "info|host $nv, rootfs ${inst:-sin nvidia-utils}|instalar nvidia-utils=<host> en rootfs (Fase 4)|4"
+                echo "info|host $nv, rootfs ${inst:-sin nvidia-utils}|instalar nvidia-utils=<host> en rootfs|4"
             fi
             ;;
         musl-glibc-stack)
@@ -167,10 +167,10 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             dri="$(detect_dev_nodes | grep -E '/(card[0-9]+|renderD[0-9]+)$|nvidia' || true)"
             if [[ "$lc" != musl ]]; then echo "skip|libc $lc, no aplica||"; return 0; fi
             if [[ -z "$dri" ]]; then echo "skip|musl sin GPU expuesta||"; return 0; fi
-            # R5-H8: sin rootfs no hay donde instalar el stack (antes
+            # sin rootfs no hay donde instalar el stack (antes
             # proponia would_do sin rootfs existente).
             if ! image_ok; then echo "skip|sin rootfs verificado||"; return 0; fi
-            # Q4-H5: la lista puede morir (NVIDIA sin version); el informe
+            # la lista puede morir (NVIDIA sin version); el informe
             # nunca muere: fallback explicito.
             _gsp="$(gpu_stack_pkgs 2>/dev/null | xargs || true)"
             [[ -n "$_gsp" ]] || _gsp="nvidia-utils (version del host ilegible: instala a mano)"
@@ -181,7 +181,7 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
             if [[ -z "$g" || "$g" == nvidia ]]; then echo "skip|lo cubre nvidia-align o no hay discreta||"; return 0; fi
             if ! image_ok; then echo "skip|sin rootfs verificado||"; return 0; fi
             if ! is_mesa_mini; then echo "ok|stack completo instalado||"; return 0; fi
-            echo "todo|GPU $g con mesa-mini (sin LLVM)|instalar mesa completo + vulkan + lib32 (opt-in, Fase 4)|opt-in"
+            echo "todo|GPU $g con mesa-mini (sin LLVM)|instalar mesa completo + vulkan + lib32 (opt-in)|opt-in"
             ;;
         staging-cleanup)
             local inv="" n=0 wd="" w acc p
@@ -217,7 +217,7 @@ fixes_json() { # array "fixes" para --json (fixes_available sigue siendo [ids])
     for fid in "${FIX_IDS[@]}"; do
         out="$(fix_probe "$fid")"
         IFS='|' read -r st reason would opt <<<"$out"
-        # R5-H8: aplicable solo si hay trabajo (todo). 'ok' y 'skip'
+        # aplicable solo si hay trabajo (todo). 'ok' y 'skip'
         # son false (antes 'ok' era true con would_do vacio).
         if [[ "$st" == todo ]]; then app=true; else app=false; fi
         dest=false; req=true
@@ -235,10 +235,10 @@ fixes_json() { # array "fixes" para --json (fixes_available sigue siendo [ids])
     return 0
 }
 
-# Fixes propuestos (Commit 4: informan y proponen; solo hold-mesa aplica).
+# Fixes propuestos (informan y proponen; solo hold-mesa aplica).
 # Contrato: `doctor --fix` informa (rc 0); `--fix --apply` exige root y
 # aplica no-destructivos; `--fix --apply --confirm` + tty para destructivos.
-# Ya no toca el `ok` de cmd_doctor: devuelve su propio rc (T20e).
+# Ya no toca el `ok` de cmd_doctor: devuelve su propio rc.
 doctor_fix() { # [--fix [--apply [--confirm]]]
     [[ "${1:-}" == "--fix" ]] || return 0
     local apply="" confirm="" fails=0
@@ -247,8 +247,8 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
     if [[ -n "$apply" && "$(id -u)" -ne 0 ]]; then
         die "'$PROG doctor --fix --apply' necesita root (sin root solo informa)"
     fi
-    [[ -n "$apply" ]] && data_lock # Q4-H1: el apply muta (hold/staging/musl)
-    # Q4-H6: avisar si hay sesion bridge viva (el apply rota el root).
+    [[ -n "$apply" ]] && data_lock # el apply muta (hold/staging/musl)
+    # avisar si hay sesion bridge viva (el apply rota el root).
     # Guarda command -v: tests que sourcean 60-hw sin 80-bridge no la tienen.
     [[ -n "$apply" ]] && command -v bridge_session_notice >/dev/null 2>&1 && bridge_session_notice
     local fid out st reason would opt
@@ -274,7 +274,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                 elif [[ "$fid" == musl-glibc-stack && -n "$apply" ]]; then
                     local -a _sp
                     local _sout
-                    # Q4-H5: si la lista muere (NVIDIA ilegible), [fallo]
+                    # si la lista muere (NVIDIA ilegible), [fallo]
                     # honesto ANTES de instalar nada (no medio-estado).
                     if ! _sout="$(gpu_stack_pkgs)" || [[ -z "$_sout" ]]; then
                         echo "  [fallo] $fid no se pudo aplicar (lista vacia o version ilegible)" >&2; fails=1
@@ -287,7 +287,7 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                         fi
                     fi
                 elif [[ -n "$apply" ]]; then
-                    echo "  [skip]  $fid (Fase 4, aún no implementado)"
+                    echo "  [skip] $fid (aún no implementado)"
                 fi
                 ;;
             info)
@@ -357,7 +357,7 @@ cmd_doctor() {
     fi
     image_ok; local _img=$?
     say $_img "imagen en $ARXY_ROOT"
-    # R5-H3: el recien instalado no recibe "siguiente paso" (la via xbps
+    # el recien instalado no recibe "siguiente paso" (la via xbps
     # no muestra el eco de install.sh). Sugerir setup/quickstart aqui.
     if (( _img != 0 )); then msg "siguiente: $PROG setup (descarga ~130MB) o $PROG quickstart"; fi
     [[ -f "$ARXY_VERSION_FILE" ]] && msg "imagen: $(version_line)"
@@ -444,7 +444,7 @@ probe_overlayfs() { # 1 si overlay rootless monta en userns (best-effort, sin re
     [[ -n "$t" && -d "$t" ]] || { echo 0; return 0; }
     _trap_return="$(trap -p RETURN || true)"
     trap 'rm -rf "${t:-}"' RETURN
-    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; [[ -n "$t" ]] && rm -rf "$t"; return 0; }; # Q2-H9: sin :? aqui (mktemp pudo fallar y hay que retornar 0, no morir); T12b lo permite solo en esta linea
+    mkdir -p "$t/l" "$t/u" "$t/w" "$t/m" 2>/dev/null || { echo 0; if [[ -n "$_trap_return" ]]; then eval "$_trap_return"; else trap - RETURN; fi; [[ -n "$t" ]] && rm -rf "$t"; return 0; }; # sin :? aqui (mktemp pudo fallar y hay que retornar 0, no morir)
     local o="lowerdir=$t/l,upperdir=$t/u,workdir=$t/w,userxattr"
     if unshare -Urm mount -t overlay overlay -o "$o" "$t/m" 2>/dev/null; then
         echo 1
@@ -513,14 +513,14 @@ emit_hardware_json() {
     local fixes="" fid fst
     for fid in "${FIX_IDS[@]}"; do
         fst="$(fix_probe "$fid" | cut -d'|' -f1)"
-        # R5-H8: solo 'todo' es disponible/aplicable (antes 'ok' tambien
+        # solo 'todo' es disponible/aplicable (antes 'ok' tambien
         # entraba: texto decia [ok] y el JSON lo listaba aplicable con
         # would_do vacio).
         [[ "$fst" == todo ]] && fixes+="$fid "
     done
     local rver=""
     [[ -f "$ARXY_VERSION_FILE" ]] && rver="$(version_field date || true)"
-    # R3-H6 (ruta JSON): mismo aviso que version_line, a stderr, sin
+    # (ruta JSON): mismo aviso que version_line, a stderr, sin
     # tocar el documento (version:null ya es el contrato en corrupto).
     if [[ -f "$ARXY_VERSION_FILE" && -z "$rver" ]]; then
         msg "aviso: version ilegible, regenero en el proximo setup/install" >&2
@@ -558,7 +558,7 @@ emit_hardware_json() {
     return $ok
 }
 
-# Perfil persistido (Commit 3): hardware.json es CACHÉ del mismo schema,
+# Perfil persistido: hardware.json es CACHÉ del mismo schema,
 # escrita por setup; doctor --json siempre calcula fresco, nunca la lee.
 write_hardware_json() { # <json> : atómico + solo-si-cambia; nunca falla setup
     local json="$1" f="$ARXY_DATA/hardware.json" tmp old
@@ -566,7 +566,7 @@ write_hardware_json() { # <json> : atómico + solo-si-cambia; nunca falla setup
     mkdir -p "$ARXY_DATA" 2>/dev/null || { msg "aviso: sin $ARXY_DATA, omito hardware.json" >&2; return 0; }
     if [[ -f "$f" ]]; then
         old="$(cat "$f" 2>/dev/null || true)"
-        [[ "$old" == "$json" ]] && return 0 # idéntico: preserva mtime (T13c)
+        [[ "$old" == "$json" ]] && return 0 # idéntico: preserva mtime
     fi
     tmp="$(mktemp "$ARXY_DATA/.hardware.json.XXXXXX" 2>/dev/null || true)"
     [[ -n "$tmp" ]] || { msg "aviso: sin temporal para hardware.json" >&2; return 0; }

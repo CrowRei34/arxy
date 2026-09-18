@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# test-version-format.sh — write_version emite JSON format 1 válido (Commit 5).
+# test-version-format.sh — write_version emite JSON format 1 válido.
 # Sin root ni imagen: sourcea lib/ con ARXY_ROOT en /tmp. Las funciones se
 # llaman DIRECTO (sin sh -c): en subshell harían falta export -f/vars.
 set -uo pipefail
