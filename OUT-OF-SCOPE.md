@@ -140,3 +140,5 @@ Para retener múltiples generaciones se requeriría versionado de
 directorios (ej. `.old.1`, `.old.2`), pero el diseño prioriza
 simplicidad atómica. Upgrade: snapshots btrfs/ZFS o múltiples links,
 solo si la demanda lo exige.
+
+- **z-repo noarch support**: z-repo/check_outdated.py silently skips packages with `archs="noarch"`. As a workaround, arxy's template drops `noarch` and builds for all architectures natively (e.g. x86_64 and x86_64-musl). This results in duplicated CI builds for architecture-independent packages. Fixing this requires modifying check_outdated.py in z-repo. Upgrade path: cuando z-repo soporte noarch, restaurar el canonical a archs="noarch".
