@@ -8,9 +8,9 @@ revision=1
 # build_style=meta # build_style=meta deprecado en xbps-src, reemplazado por instalación directa (FILESDIR)
 short_desc="Subsistema Arch para correr software glibc en cualquier distro"
 maintainer="Dicov <srdicov@gmail.com>"
-license="GPL-3.0-or-later"
 depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils minisign sudo"
 homepage="https://github.com/SrDicov/arxy"
+license="GPL-3.0-or-later"
 # No pisar la config del usuario al actualizar (puede anclar URL/SHA).
 # arxy.pub NO es conf_files: es trust root y el paquete la renueva.
 # Sin bridge (equivale a install.sh --without-bridge; el daemon
