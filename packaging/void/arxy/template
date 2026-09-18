@@ -6,8 +6,8 @@ version=0.6.0
 revision=1
 # archs="noarch"  # noarch no soportado por z-repo/check_outdated.py (skipped silencioso)
 # build_style=meta # build_style=meta deprecado en xbps-src, reemplazado por instalación directa (FILESDIR)
-short_desc="Subsistema Arch para correr software glibc en cualquier distro"
 depends="bash bubblewrap curl tar zstd xz gzip file desktop-file-utils minisign sudo"
+short_desc="Subsistema Arch para correr software glibc en cualquier distro"
 maintainer="Dicov <srdicov@gmail.com>"
 license="GPL-3.0-or-later"
 homepage="https://github.com/SrDicov/arxy"
