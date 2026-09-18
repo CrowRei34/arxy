@@ -129,3 +129,14 @@ La firma minisign (Fase 7) autentica el tarball pero no su frescura:
 un `latest` antiguo firmado seguiría verificando. Upgrade: estado
 firmado `{format, sha256, timestamp}` + refusar timestamp menor, solo
 cuando un consumidor real lo pida (hoy `setup` siempre quiere latest).
+
+## 16. Retención del Rollback (1 generación)
+
+El comando `arxy rollback` retiene únicamente la generación
+inmediatamente anterior (`ARXY_ROOT.old`). Ejecutar un segundo
+`setup` (por ejemplo, tras un intento fallido de arreglo)
+destruirá la copia buena original, reemplazándola por la actual.
+Para retener múltiples generaciones se requeriría versionado de
+directorios (ej. `.old.1`, `.old.2`), pero el diseño prioriza
+simplicidad atómica. Upgrade: snapshots btrfs/ZFS o múltiples links,
+solo si la demanda lo exige.

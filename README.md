@@ -50,7 +50,7 @@ Requisitos del host: `bash bwrap curl tar zstd xz gzip file` +
 
 | Comando | Qué hace |
 |---|---|
-| `arxy install <pkg...>` / `--aur` | instala (oficial / AUR `-bin`) + crea launcher (`Exec=arxy run …`, directo, sin wrappers). Pide sudo; si falta la imagen la descarga (~130MB); launcher en `~/.local/share/applications/` |
+| `arxy install <pkg...>` / `--aur` | instala (oficial / AUR `-bin`) + crea launcher. Pide sudo (los de AUR se compilan como usuario sin privilegios, luego piden clave para instalar); descarga imagen si falta; launcher en `~/.local/share/applications/` |
 | `arxy remove <pkg...>` | desinstala y borra su launcher |
 | `arxy run <bin> [args]` | ejecuta algo dentro del subsistema |
 | `arxy which <bin>` | dónde se resolvería ([subsistema] o [host]) |

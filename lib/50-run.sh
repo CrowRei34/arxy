@@ -90,6 +90,9 @@ cmd_run() {
         exec "$LD_LINUX" --library-path "$ARXY_LIBPATH" "$target" "$@"
     fi
     check_musl
+    if [[ "$target" == *"/steam" ]]; then
+        [[ -d "$ARXY_DATA/home/.local/share/Steam" ]] || msg "Steam descargará ~500 MB en la primera ejecución"
+    fi
     run_in --chdir "$(inside_dir)" -- "$target" "$@"
 }
 

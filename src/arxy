@@ -2071,6 +2071,9 @@ cmd_run() {
         exec "$LD_LINUX" --library-path "$ARXY_LIBPATH" "$target" "$@"
     fi
     check_musl
+    if [[ "$target" == *"/steam" ]]; then
+        [[ -d "$ARXY_DATA/home/.local/share/Steam" ]] || msg "Steam descargará ~500 MB en la primera ejecución"
+    fi
     run_in --chdir "$(inside_dir)" -- "$target" "$@"
 }
 
@@ -2286,14 +2289,14 @@ fix_probe() { # <hold-mesa|nvidia-align|musl-glibc-stack|gpu-full-stack>
                 return 0
             fi
             if ! image_ok; then
-                echo "todo|host $nv, sin rootfs verificado|instalar nvidia-utils=<host> en rootfs (Fase 4)|"
+                echo "info|host $nv, sin rootfs verificado|instalar nvidia-utils=<host> en rootfs (Fase 4)|4"
                 return 0
             fi
             inst="$(run_pacman -Qi nvidia-utils 2>/dev/null | grep -m1 '^Version' | grep -Eo '[0-9]+\.[0-9]+(\.[0-9]+)?' | head -n 1 || true)"
             if [[ -n "$inst" && "$inst" == "$nv" ]]; then
                 echo "ok|utils $inst alineados con host||"
             else
-                echo "todo|host $nv, rootfs ${inst:-sin nvidia-utils}|instalar nvidia-utils=<host> en rootfs (Fase 4)|"
+                echo "info|host $nv, rootfs ${inst:-sin nvidia-utils}|instalar nvidia-utils=<host> en rootfs (Fase 4)|4"
             fi
             ;;
         musl-glibc-stack)
@@ -2424,7 +2427,10 @@ doctor_fix() { # [--fix [--apply [--confirm]]]
                     echo "  [skip]  $fid (Fase 4, aún no implementado)"
                 fi
                 ;;
-            *) echo "  [skip]  $fid ($reason)" ;;
+            info)
+                echo "  [info] $fid ($reason) (informativo, no aplicable)"
+                ;;
+            skip) echo "  [skip] $fid ($reason)" ;;
         esac
     done
     local lock="$ARXY_ROOT/var/lib/pacman/db.lck"
