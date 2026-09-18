@@ -53,7 +53,7 @@ Si usas la variante Void musl, el repositorio es `.../z-repo/x86_64-musl`. Si pr
 | `arxy dedup` | Crea *hardlinks* para archivos idénticos en `/usr`. Se lanza automáticamente tras un `install` o `update` si el ahorro supera los 10 MB (puedes desactivarlo con `ARXY_NO_AUTO_DEDUP=1`). |
 | `axy` | Un alias rápido para no escribir `arxy` todo el rato. |
 | `arxy install arxy-gaming [--dry-run]` | Despliega el stack de *gaming* ajustado a tu GPU (hace un *rewrite* a `arxy-gaming-<vendor>`). La parte de AUR se compila en espacio de usuario. ¿Buscas Steam? Ve a la sección de Steam más abajo. Requiere Nivel 1; la parte de AUR aún es un *draft*. |
-| `arxy host-bridge [--daemon|--stop|--status]` | Gestiona el demonio *host-bridge* (Fase 5), encargado de pasar las notificaciones y los enlaces desde el *sandbox* hacia tu host. |
+| `arxy host-bridge [--daemon|--stop|--status]` | Gestiona el demonio *host-bridge*, encargado de pasar las notificaciones y los enlaces desde el *sandbox* hacia tu host. |
 
 Si algo se rompe, el flujo de rescate es simple: `arxy doctor` → `arxy doctor --fix` → `arxy quickstart`.
 
@@ -93,7 +93,7 @@ Arrancar el subsistema tiene un coste casi nulo. La imagen no es más que un *ro
 ## Validación y Pruebas
 
 * **Matriz de pruebas en 5 distros** (Alpine, Chimera, Void, Ubuntu y Ubuntu en modo privilegiado): Se ejecuta a través de `arxy-image/tests/matrix.sh`. Hacemos aserciones estrictas sobre el contenido resultante, no solo miramos el código de salida (pasamos entre 33 y 43 checks dependiendo del nivel y las *flags*, ya que la rama de *libc*, el *fallback* a L2 y el chroot `MATRIX_WRITE2=1` varían según el entorno).
-Cubre el ciclo completo del Nivel 1 (instalación, ejecución, exportación, borrado) y el Nivel 2 en operaciones de lectura y bloqueos de AUR. Las escrituras en Nivel 2 se prueban forzando `MATRIX_WRITE2=1`. Exportar accesos directos bajo L2 necesita más cobertura automatizada (aunque se verificó a mano exhaustivamente en el ciclo 6.5.5). Esta matriz se ejecuta en el CI con cada build de la imagen base.
+Cubre el ciclo completo del Nivel 1 (instalación, ejecución, exportación, borrado) y el Nivel 2 en operaciones de lectura y bloqueos de AUR. Las escrituras en Nivel 2 se prueban forzando `MATRIX_WRITE2=1`. Exportar accesos directos bajo L2 necesita más cobertura automatizada (se verificó a mano). Esta matriz se ejecuta en el CI con cada build de la imagen base.
 * **Hardware real** (Intel HD 630): `tests/test-hardware.sh` comprueba que D-Bus funcione en L1 y L2, que el driver `iris` acelere gráficamente, que el *softpipe* sin LLVM rinda como se espera, y levanta una aplicación Electron renderizando una ventana de verdad. (Como `dbus-send` no viene en la imagen mini, ese test hace un SKIP legítimo a menos que hagas un `arxy install dbus`).
 
 ## Instalación de Steam (paso a paso)
@@ -113,7 +113,7 @@ El proyecto está escrito en Bash puro; la regla de oro es no introducir depende
 Antes de hacer un commit o abrir una Pull Request, asegúrate de pasar estos checks:
 
 ```bash
-make src/arxy && git diff --exit-code src/arxy   # comprueba que el build sea byte-idéntico (D9)
+make src/arxy && git diff --exit-code src/arxy   # comprueba que el build sea byte-idéntico
 bash -n lib/*.sh src/arxy install.sh && shellcheck -S warning src/arxy install.sh
 
 ```
@@ -124,4 +124,4 @@ Por favor, antes de pushear, corre la matriz de pruebas del repositorio hermano 
 
 ## Licencia
 
-Distribuido bajo la licencia MIT — tienes todos los detalles en [LICENSE](https://www.google.com/search?q=LICENSE&utm_source=gemini).
+Distribuido bajo GPL-3.0-or-later — detalles en [LICENSE](LICENSE).
