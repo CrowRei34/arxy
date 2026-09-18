@@ -17,7 +17,7 @@ set -uo pipefail
 HOME="${HOME:-/root}"
 export LC_ALL=C
 
-ARXY_VERSION="0.5.0"
+ARXY_VERSION="0.6.0"
 PROG="arxy"
 SELF="$(readlink -f "$0" 2>/dev/null || echo "$0")"
 

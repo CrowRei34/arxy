@@ -1,6 +1,6 @@
 # Changelog de arxy
 
-## [Unreleased]
+## [0.6.0] - 2026-09-18
 
 ### Cambiado
 
